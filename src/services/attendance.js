@@ -5,16 +5,16 @@ import * as DemoAttendance from "@/demo/attendance";
 import * as FirebaseAttendance from "./firebase/attendance";
 
 export const AttendanceService = {
-  getAttendanceHistory: (studentId) => {
+  getAttendanceHistory: (studentId, studentName) => {
     return isDemoActive() 
-      ? DemoAttendance.getAttendanceHistory(studentId) 
-      : FirebaseAttendance.getAttendanceHistory(studentId);
+      ? DemoAttendance.getAttendanceHistory(studentId, studentName)
+      : FirebaseAttendance.getAttendanceHistory(studentId, studentName);
   },
 
-  subscribeAttendanceHistory: (studentId, callback) => {
+  subscribeAttendanceHistory: (studentId, studentName, callback) => {
     return isDemoActive()
-      ? DemoAttendance.subscribeAttendanceHistory(studentId, callback)
-      : FirebaseAttendance.subscribeAttendanceHistory(studentId, callback);
+      ? DemoAttendance.subscribeAttendanceHistory(studentId, studentName, callback)
+      : FirebaseAttendance.subscribeAttendanceHistory(studentId, studentName, callback);
   },
 
   subscribeEvaluations: (studentName, callback) => {

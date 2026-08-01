@@ -23,15 +23,16 @@ export function useAttendance(studentId, studentName) {
     }
     setLoading(true);
     try {
-      const history = await AttendanceService.getAttendanceHistory(studentId);
+      const history = await AttendanceService.getAttendanceHistory(studentId, studentName);
       setAttendanceHistory(history);
     } catch (err) {
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, [studentId]);
+  }, [studentId, studentName]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!studentId && !studentName) {
       setLoading(false);
@@ -42,7 +43,7 @@ export function useAttendance(studentId, studentName) {
     setError(null);
 
     // 1. Suscribirse a historial de asistencias
-    const unsubAttendance = AttendanceService.subscribeAttendanceHistory(studentId, (list) => {
+    const unsubAttendance = AttendanceService.subscribeAttendanceHistory(studentId, studentName, (list) => {
       setAttendanceHistory(list);
     });
 
@@ -71,6 +72,7 @@ export function useAttendance(studentId, studentName) {
       unsubDrills();
     };
   }, [studentId, studentName]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return {
     data: {

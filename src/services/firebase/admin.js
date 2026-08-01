@@ -116,6 +116,32 @@ async function countQuery(collectionName, field, value) {
   return snap.size;
 }
 
+function attendanceRecordMatchesStudent(record, studentId, studentName) {
+  if (record?.studentId) return record.studentId === studentId;
+  return !!studentName && (record?.studentName === studentName || record?.name === studentName);
+}
+
+async function countAttendanceForStudent(studentId, studentName) {
+  const snap = await getDocs(collection(db, "attendance"));
+  let count = 0;
+
+  snap.forEach((docSnapshot) => {
+    const data = docSnapshot.data();
+    const records = Array.isArray(data.records) ? data.records : null;
+
+    if (records) {
+      count += records.filter((record) => attendanceRecordMatchesStudent(record, studentId, studentName)).length;
+      return;
+    }
+
+    if (data.studentId === studentId || (!data.studentId && studentName && data.studentName === studentName)) {
+      count += 1;
+    }
+  });
+
+  return count;
+}
+
 /**
  * Revisa si un alumno tiene historial que impide su eliminación definitiva.
  */
@@ -125,7 +151,7 @@ export async function getStudentLifecycleHistory(student) {
   if (!studentId) return { payments: 0, attendance: 0, evaluations: 0, total: 0 };
 
   const payments = await countQuery("payments", "studentId", studentId);
-  const attendance = await countQuery("attendance", "studentId", studentId);
+  const attendance = await countAttendanceForStudent(studentId, studentName);
   const evaluationsById = await countQuery("evaluations", "studentId", studentId);
   const evaluationsByName = studentName ? await countQuery("evaluations", "studentName", studentName) : 0;
   const evaluations = Math.max(evaluationsById, evaluationsByName);

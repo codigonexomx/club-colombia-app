@@ -3,13 +3,13 @@
 import { getActiveDemoData } from "./demoData";
 import { demoConfig } from "./demoConfig";
 
-export async function getAttendanceHistory(studentId) {
+export async function getAttendanceHistory(studentId, studentName) {
   await new Promise((resolve) => setTimeout(resolve, demoConfig.behavior.simulatedLatency));
   const data = getActiveDemoData();
   return data.attendance;
 }
 
-export function subscribeAttendanceHistory(studentId, callback) {
+export function subscribeAttendanceHistory(studentId, studentName, callback) {
   const data = getActiveDemoData();
   callback(data.attendance);
   return () => {};

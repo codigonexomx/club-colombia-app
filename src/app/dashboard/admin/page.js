@@ -278,7 +278,7 @@ export default function AdminDashboard() {
           entry.category,
           entry.studentId,
           entry.studentName,
-          ...records.flatMap((record) => [record.name, record.status])
+          ...records.flatMap((record) => [record.studentId, record.studentName, record.name, record.status])
         ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedSearch));
