@@ -27,10 +27,16 @@ export function useCoach() {
     setLoading(true);
     setError(null);
 
-    const unsubscribe = CoachService.subscribeStudentsList((list) => {
-      setData(list);
-      setLoading(false);
-    });
+    const unsubscribe = CoachService.subscribeStudentsList(
+      (list) => {
+        setData(list);
+        setLoading(false);
+      },
+      (err) => {
+        setError(err);
+        setLoading(false);
+      }
+    );
 
     return () => {
       unsubscribe();

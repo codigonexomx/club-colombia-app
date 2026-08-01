@@ -11,10 +11,10 @@ export const CoachService = {
       : FirebaseCoach.getStudentsList();
   },
 
-  subscribeStudentsList: (callback) => {
+  subscribeStudentsList: (callback, onError) => {
     return isDemoActive()
-      ? DemoCoach.subscribeStudentsList(callback)
-      : FirebaseCoach.subscribeStudentsList(callback);
+      ? DemoCoach.subscribeStudentsList(callback, onError)
+      : FirebaseCoach.subscribeStudentsList(callback, onError);
   },
 
   saveAttendanceReport: (records) => {

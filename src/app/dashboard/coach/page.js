@@ -27,6 +27,7 @@ export default function CoachDashboard() {
   const [tacticalNotes, setTacticalNotes] = useState("");
   const [evaluationSaved, setEvaluationSaved] = useState(false);
   const [evaluationError, setEvaluationError] = useState("");
+  const [isSavingEvaluation, setIsSavingEvaluation] = useState(false);
   const [levelMessage, setLevelMessage] = useState("");
 
   // Invocar custom hooks para el Demo Mode / Firebase
@@ -124,10 +125,18 @@ export default function CoachDashboard() {
   // Guardar reporte de evaluación técnica en histórico
   const saveEvaluation = async (e) => {
     e.preventDefault();
-    if (!selectedStudent) return;
+    if (isSavingEvaluation) return;
+
+    setEvaluationSaved(false);
+    setEvaluationError("");
+
+    if (!selectedStudent) {
+      setEvaluationError("Selecciona un alumno antes de guardar la evaluación.");
+      return;
+    }
 
     try {
-      setEvaluationError("");
+      setIsSavingEvaluation(true);
       const selectedStudentDoc = operationalStudents.find(s => (s.studentId || s.id) === selectedStudent);
       if (!selectedStudentDoc || selectedStudentDoc.status !== "active") {
         setSelectedStudent("");
@@ -155,6 +164,9 @@ export default function CoachDashboard() {
       }, 3000);
     } catch (err) {
       console.error("Error al guardar evaluación:", err);
+      setEvaluationError("No fue posible guardar la evaluación. Verifica tu conexión e inténtalo nuevamente.");
+    } finally {
+      setIsSavingEvaluation(false);
     }
   };
 
@@ -377,14 +389,14 @@ export default function CoachDashboard() {
             </div>
 
             {evaluationSaved && (
-              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 p-3 rounded-2xl text-xs flex items-center gap-2 animate-fade-in box-glow-amber">
+              <div role="status" className="bg-amber-500/10 border border-amber-500/20 text-amber-500 p-3 rounded-2xl text-xs flex items-center gap-2 animate-fade-in box-glow-amber">
                 <Check className="w-5 h-5" />
                 Informe técnico enviado al sistema central.
               </div>
             )}
 
             {evaluationError && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-2xl text-xs flex items-center gap-2 animate-fade-in">
+              <div role="alert" className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-2xl text-xs flex items-center gap-2 animate-fade-in">
                 <AlertCircle className="w-5 h-5" />
                 {evaluationError}
               </div>
@@ -523,9 +535,13 @@ export default function CoachDashboard() {
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-amber-600 to-amber-400 hover:from-amber-500 hover:to-amber-300 text-slate-950 font-display font-black text-sm py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_25px_rgba(245,158,11,0.5)] cursor-pointer mt-4"
+              disabled={isSavingEvaluation}
+              aria-busy={isSavingEvaluation}
+              className={`w-full bg-gradient-to-r from-amber-600 to-amber-400 hover:from-amber-500 hover:to-amber-300 text-slate-950 font-display font-black text-sm py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_25px_rgba(245,158,11,0.5)] mt-4 ${
+                isSavingEvaluation ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
+              }`}
             >
-              Guardar Reporte y Generar Radar 3D
+              {isSavingEvaluation ? "Guardando evaluación..." : "Guardar evaluación"}
             </button>
           </form>
         )}

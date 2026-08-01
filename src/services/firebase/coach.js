@@ -1,7 +1,7 @@
 // src/services/firebase/coach.js
 
 import { db } from "@/lib/firebase";
-import { collection, doc, onSnapshot, getDocs, setDoc, addDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, getDocs, setDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 
 /**
  * Obtiene la lista de deportistas asignados de la base de datos real.
@@ -19,7 +19,7 @@ export async function getStudentsList() {
 /**
  * Suscribe en tiempo real a la lista de estudiantes.
  */
-export function subscribeStudentsList(callback) {
+export function subscribeStudentsList(callback, onError) {
   return onSnapshot(collection(db, "students"), (snapshot) => {
     const studs = [];
     snapshot.forEach((doc) => {
@@ -27,6 +27,8 @@ export function subscribeStudentsList(callback) {
       studs.push({ id: doc.id, studentId: data.studentId || doc.id, ...data });
     });
     callback(studs);
+  }, (err) => {
+    if (onError) onError(err);
   });
 }
 
@@ -50,23 +52,28 @@ export async function saveAttendanceReport(records) {
  */
 export async function saveTechnicalEvaluation(evaluationData) {
   const { studentId, studentName, metrics, tacticalNotes, healthStatus } = evaluationData;
-  // 1. Guardar evaluación
-  await addDoc(collection(db, "evaluations"), {
+  const batch = writeBatch(db);
+  const evaluationRef = doc(collection(db, "evaluations"));
+  const studentRef = doc(db, "students", studentId);
+
+  batch.set(evaluationRef, {
     studentId,
     studentName,
     metrics,
     tacticalNotes,
+    healthStatus,
     date: new Date().toLocaleDateString("es-CO"),
     timestamp: new Date().toISOString(),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
-  // 2. Actualizar estado de salud
-  const studentRef = doc(db, "students", studentId);
-  await updateDoc(studentRef, {
+
+  batch.update(studentRef, {
     healthStatus,
     updatedAt: serverTimestamp()
   });
+
+  await batch.commit();
   return { success: true };
 }
 
