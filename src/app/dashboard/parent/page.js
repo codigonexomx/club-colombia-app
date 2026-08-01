@@ -10,8 +10,10 @@ import PaymentSimulator from "@/components/PaymentSimulator";
 import { useParent, useAttendance, usePayments, useCalendar, useQR, useParentStudents } from "@/hooks";
 import { useTrainingSchedules } from "@/hooks/useTrainingSchedules";
 import LevelBadge from "@/components/LevelBadge";
+import { calculateAttendanceSummary, getAttendanceStatusLabel, sortAttendanceNewestFirst } from "@/lib/attendanceModel";
 import { getWeekdayLabel, trainingScheduleMatchesStudent } from "@/lib/trainingScheduleModel";
 
+const EMPTY_ARRAY = [];
 
 const parseVideoUrl = (url) => {
   if (!url) return { type: "unknown", embedUrl: "" };
@@ -54,9 +56,11 @@ export default function ParentDashboard() {
   const [activePlaybackRates, setActivePlaybackRates] = useState({});
   const [rsvpFeedback, setRsvpFeedback] = useState({});
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setMounted(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleSetSpeed = (drillId, speed) => {
     const vid = videoRefs.current[drillId];
@@ -69,7 +73,7 @@ export default function ParentDashboard() {
   // Invocar custom hooks para el Demo Mode / Firebase
   const { data: parentData, updateStatus: updateParentStatus } = useParent(parentUid);
   
-  const studentIds = parentData?.studentIds || [];
+  const studentIds = parentData?.studentIds || EMPTY_ARRAY;
   const { data: parentStudents } = useParentStudents(studentIds);
   const initialStudentId = selectedStudentId || studentIds[0] || parentData?.studentId || "";
   const initialStudentName = parentData?.studentName || "";
@@ -95,6 +99,7 @@ export default function ParentDashboard() {
   const studentHealth = studentData?.healthStatus || "optimal";
 
   const evalHistory = attendanceData?.evalHistory || [];
+  const attendanceHistory = attendanceData?.attendanceHistory || EMPTY_ARRAY;
   const metrics = attendanceData?.metrics || null;
   const coachNotes = attendanceData?.coachNotes || "";
   const drills = attendanceData?.drills || [];
@@ -102,6 +107,7 @@ export default function ParentDashboard() {
   const events = calendarData || [];
   const weeklySchedules = (allTrainingSchedules || []).filter((schedule) => trainingScheduleMatchesStudent(schedule, studentData));
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!parentUid || studentIds.length === 0) return;
     const storageKey = `parent:selectedStudent:${parentUid}`;
@@ -110,7 +116,8 @@ export default function ParentDashboard() {
       ? storedStudentId
       : studentIds[0];
     setSelectedStudentId(prev => (prev && studentIds.includes(prev) ? prev : nextStudentId));
-  }, [parentUid, studentIds.join("|")]);
+  }, [parentUid, studentIds]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleStudentSelection = (studentId) => {
     setSelectedStudentId(studentId);
@@ -135,6 +142,15 @@ export default function ParentDashboard() {
       };
     });
   };
+
+  const sortedAttendanceHistory = React.useMemo(
+    () => sortAttendanceNewestFirst(attendanceHistory),
+    [attendanceHistory]
+  );
+  const attendanceSummary = React.useMemo(
+    () => calculateAttendanceSummary(attendanceHistory),
+    [attendanceHistory]
+  );
 
   const getMetricColor = (metric) => {
     switch (metric) {
@@ -512,7 +528,7 @@ export default function ParentDashboard() {
                       </div>
 
                       {/* Recharts Historial Gráfico */}
-                      <div className="bg-[#07090e]/40 border border-slate-800/70 p-4 rounded-2xl space-y-4">
+	                      <div className="bg-[#07090e]/40 border border-slate-800/70 p-4 rounded-2xl space-y-4">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                           <div>
                             <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-350">Historial de Calificaciones</h3>
@@ -559,11 +575,65 @@ export default function ParentDashboard() {
                             <div className="h-full w-full flex items-center justify-center bg-slate-950/20 rounded-xl border border-slate-900 animate-pulse text-[9px] text-slate-600 font-mono">
                               No existen evaluaciones
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+	                          )}
+	                        </div>
+	                      </div>
+
+	                      <div className="bg-[#07090e]/40 border border-slate-800/70 p-4 rounded-2xl space-y-4">
+	                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+	                          <div>
+	                            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-350">Historial de Asistencia</h3>
+	                            <p className="text-[9px] text-slate-500">Registro de entrenamientos ordenado del más reciente al más antiguo.</p>
+	                          </div>
+	                          <div className="text-right">
+	                            <div className="text-lg font-black font-mono text-[#10b981]">{attendanceSummary.percentage}%</div>
+	                            <div className="text-[8px] text-slate-500 uppercase tracking-wider">Asistencia</div>
+	                          </div>
+	                        </div>
+
+	                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+	                          <div className="bg-[#07090e]/70 border border-slate-850 rounded-xl p-3">
+	                            <div className="text-sm font-black text-slate-200 font-mono">{attendanceSummary.total}</div>
+	                            <div className="text-[8px] text-slate-500 uppercase tracking-wider">Entrenamientos</div>
+	                          </div>
+	                          <div className="bg-[#07090e]/70 border border-emerald-500/20 rounded-xl p-3">
+	                            <div className="text-sm font-black text-[#10b981] font-mono">{attendanceSummary.present}</div>
+	                            <div className="text-[8px] text-slate-500 uppercase tracking-wider">Presentes</div>
+	                          </div>
+	                          <div className="bg-[#07090e]/70 border border-red-500/20 rounded-xl p-3">
+	                            <div className="text-sm font-black text-red-400 font-mono">{attendanceSummary.absent}</div>
+	                            <div className="text-[8px] text-slate-500 uppercase tracking-wider">Ausentes</div>
+	                          </div>
+	                          <div className="bg-[#07090e]/70 border border-amber-500/20 rounded-xl p-3">
+	                            <div className="text-sm font-black text-amber-400 font-mono">{attendanceSummary.justified}</div>
+	                            <div className="text-[8px] text-slate-500 uppercase tracking-wider">Justificados</div>
+	                          </div>
+	                        </div>
+
+	                        {sortedAttendanceHistory.length === 0 ? (
+	                          <div className="bg-slate-950/20 border border-slate-900 rounded-xl p-5 text-center text-[10px] text-slate-600 font-mono">
+	                            No hay asistencias registradas
+	                          </div>
+	                        ) : (
+	                          <div className="divide-y divide-slate-850 rounded-xl border border-slate-850 overflow-hidden">
+	                            {sortedAttendanceHistory.map((entry) => (
+	                              <div key={entry.id} className="flex items-center justify-between gap-3 bg-[#07090e]/60 px-3 py-2.5">
+	                                <div className="min-w-0">
+	                                  <div className="text-[10px] font-bold text-slate-250">{entry.date || "Sin fecha"}</div>
+	                                  {entry.coachName && (
+	                                    <div className="text-[8px] text-slate-500 truncate">Entrenador: {entry.coachName}</div>
+	                                  )}
+	                                </div>
+	                                <span className="text-[9px] font-black uppercase tracking-wider text-slate-200">
+	                                  {getAttendanceStatusLabel(entry.status)}
+	                                </span>
+	                              </div>
+	                            ))}
+	                          </div>
+	                        )}
+	                      </div>
+	                    </div>
+	                  )}
 
                   {/* Sub-tab 2: calendar (Microciclos semanales con RSVP) */}
                   {activeSubTab === "calendar" && (

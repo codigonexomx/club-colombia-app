@@ -15,6 +15,7 @@ import { useTrainingSchedules } from "@/hooks/useTrainingSchedules";
 import LevelBadge from "@/components/LevelBadge";
 import { LEVEL_OPTIONS, getLevelLabel, parseLegacyCategoryAndLevel, resolveStudentCategoryAndLevel } from "@/lib/levelModel";
 import { WEEKDAY_OPTIONS, getWeekdayLabel } from "@/lib/trainingScheduleModel";
+import { buildStudentAttendanceMetrics } from "@/lib/attendanceModel";
 import { calculateLeaderboard, categoryNameToId, normalizeStudentName } from "@/lib/studentModel";
 import { normalizeAndValidatePhone } from "@/lib/phone";
 
@@ -478,6 +479,12 @@ export default function AdminDashboard() {
       allAttendance
     ),
     [students, evaluations, allAttendance]
+  );
+  const studentAttendanceMetrics = React.useMemo(
+    () => buildStudentAttendanceMetrics(students, allAttendance)
+      .filter((item) => item.total > 0)
+      .sort((a, b) => b.total - a.total || b.percentage - a.percentage || a.studentName.localeCompare(b.studentName)),
+    [students, allAttendance]
   );
 
   console.log(
@@ -2844,10 +2851,66 @@ export default function AdminDashboard() {
                         })}
                       </tbody>
                     </table>
-                  </div>
-                </div>
-              </div>
-            ) : activeTab === "notifications" ? (
+	                  </div>
+	                </div>
+
+	                <div className="bg-[#07090e]/60 border border-slate-800 rounded-2xl p-4">
+	                  <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3 mb-3">
+	                    <div>
+	                      <h2 className="font-display font-black text-sm uppercase tracking-wider text-slate-200">
+	                        Métricas de Asistencia
+	                      </h2>
+	                      <p className="text-[10px] text-slate-500 mt-0.5">
+	                        Conteo por alumno calculado desde la colección attendance.
+	                      </p>
+	                    </div>
+	                    <Users className="w-5 h-5 text-[#10b981]" />
+	                  </div>
+
+	                  <div className="overflow-x-auto">
+	                    <table className="w-full text-left border-collapse font-sans">
+	                      <thead>
+	                        <tr className="border-b border-slate-850 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+	                          <th className="pb-3">Alumno</th>
+	                          <th className="pb-3">Categoría</th>
+	                          <th className="pb-3 text-center">Entrenamientos</th>
+	                          <th className="pb-3 text-center">Presentes</th>
+	                          <th className="pb-3 text-center">Ausentes</th>
+	                          <th className="pb-3 text-center">Justificados</th>
+	                          <th className="pb-3 text-right pr-4">Porcentaje</th>
+	                        </tr>
+	                      </thead>
+	                      <tbody className="divide-y divide-slate-800/40">
+	                        {studentAttendanceMetrics.length === 0 ? (
+	                          <tr>
+	                            <td colSpan={7} className="py-6 text-center text-xs text-slate-500">
+	                              Aún no hay asistencias registradas.
+	                            </td>
+	                          </tr>
+	                        ) : studentAttendanceMetrics.map((item) => (
+	                          <tr key={item.studentId} className="text-xs">
+	                            <td className="py-3 font-bold text-slate-200">
+	                              <div>{item.studentName || "Sin nombre"}</div>
+	                              <div className="text-[8px] text-slate-600 font-mono break-all">{item.studentId}</div>
+	                            </td>
+	                            <td className="py-3 text-slate-400">
+	                              <span className="bg-[#07090e] px-2 py-0.5 rounded border border-slate-850 text-[8px] uppercase tracking-wider font-mono">
+	                                {item.category || "Sin categoría"}
+	                              </span>
+	                            </td>
+	                            <td className="py-3 text-center font-mono font-bold text-slate-300">{item.total}</td>
+	                            <td className="py-3 text-center font-mono font-bold text-[#10b981]">{item.present}</td>
+	                            <td className="py-3 text-center font-mono font-bold text-red-400">{item.absent}</td>
+	                            <td className="py-3 text-center font-mono font-bold text-amber-400">{item.justified}</td>
+	                            <td className="py-3 text-right font-mono font-black text-[#10b981] pr-4">{item.percentage}%</td>
+	                          </tr>
+	                        ))}
+	                      </tbody>
+	                    </table>
+	                  </div>
+	                </div>
+	              </div>
+	            ) : activeTab === "notifications" ? (
               <div className="pt-4 space-y-5">
                 <div>
                   <h2 className="font-display font-black text-sm uppercase tracking-wider text-slate-200">
