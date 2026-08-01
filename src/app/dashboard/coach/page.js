@@ -28,14 +28,14 @@ export default function CoachDashboard() {
 
   // Estados para evaluación técnica y salud
   const [selectedStudent, setSelectedStudent] = useState("");
-  const [speed, setSpeed] = useState(DEFAULT_EVALUATION_VALUES.speed);
-  const [passing, setPassing] = useState(DEFAULT_EVALUATION_VALUES.passing);
-  const [dribbling, setDribbling] = useState(DEFAULT_EVALUATION_VALUES.dribbling);
-  const [shooting, setShooting] = useState(DEFAULT_EVALUATION_VALUES.shooting);
-  const [physical, setPhysical] = useState(DEFAULT_EVALUATION_VALUES.physical);
-  const [discipline, setDiscipline] = useState(DEFAULT_EVALUATION_VALUES.discipline);
-  const [healthStatus, setHealthStatus] = useState(DEFAULT_EVALUATION_VALUES.healthStatus); // 'optimal' | 'fatigue' | 'injured'
-  const [tacticalNotes, setTacticalNotes] = useState(DEFAULT_EVALUATION_VALUES.tacticalNotes);
+  const [speed, setSpeedState] = useState(DEFAULT_EVALUATION_VALUES.speed);
+  const [passing, setPassingState] = useState(DEFAULT_EVALUATION_VALUES.passing);
+  const [dribbling, setDribblingState] = useState(DEFAULT_EVALUATION_VALUES.dribbling);
+  const [shooting, setShootingState] = useState(DEFAULT_EVALUATION_VALUES.shooting);
+  const [physical, setPhysicalState] = useState(DEFAULT_EVALUATION_VALUES.physical);
+  const [discipline, setDisciplineState] = useState(DEFAULT_EVALUATION_VALUES.discipline);
+  const [healthStatus, setHealthStatusState] = useState(DEFAULT_EVALUATION_VALUES.healthStatus); // 'optimal' | 'fatigue' | 'injured'
+  const [tacticalNotes, setTacticalNotesState] = useState(DEFAULT_EVALUATION_VALUES.tacticalNotes);
   const [evaluationSaved, setEvaluationSaved] = useState(false);
   const [evaluationError, setEvaluationError] = useState("");
   const [isSavingEvaluation, setIsSavingEvaluation] = useState(false);
@@ -43,6 +43,32 @@ export default function CoachDashboard() {
   const [levelMessageType, setLevelMessageType] = useState("status");
   const [updatingLevelStudentIds, setUpdatingLevelStudentIds] = useState({});
   const updatingLevelStudentIdsRef = useRef({});
+
+  const createLoggedEvaluationSetter = useCallback((field, setter, functionName) => {
+    return (value) => {
+      setter((previousValue) => {
+        const nextValue = typeof value === "function" ? value(previousValue) : value;
+        console.log("[STATE CHANGE]", {
+          campo: field,
+          valorAnterior: previousValue,
+          valorNuevo: nextValue,
+          archivo: "src/app/dashboard/coach/page.js",
+          funcion: functionName
+        });
+        console.trace(`[STATE CHANGE] ${field}`);
+        return nextValue;
+      });
+    };
+  }, []);
+
+  const setSpeed = useMemo(() => createLoggedEvaluationSetter("speed", setSpeedState, "setSpeed"), [createLoggedEvaluationSetter]);
+  const setPassing = useMemo(() => createLoggedEvaluationSetter("passing", setPassingState, "setPassing"), [createLoggedEvaluationSetter]);
+  const setDribbling = useMemo(() => createLoggedEvaluationSetter("dribbling", setDribblingState, "setDribbling"), [createLoggedEvaluationSetter]);
+  const setShooting = useMemo(() => createLoggedEvaluationSetter("shooting", setShootingState, "setShooting"), [createLoggedEvaluationSetter]);
+  const setPhysical = useMemo(() => createLoggedEvaluationSetter("physical", setPhysicalState, "setPhysical"), [createLoggedEvaluationSetter]);
+  const setDiscipline = useMemo(() => createLoggedEvaluationSetter("discipline", setDisciplineState, "setDiscipline"), [createLoggedEvaluationSetter]);
+  const setHealthStatus = useMemo(() => createLoggedEvaluationSetter("healthStatus", setHealthStatusState, "setHealthStatus"), [createLoggedEvaluationSetter]);
+  const setTacticalNotes = useMemo(() => createLoggedEvaluationSetter("tacticalNotes", setTacticalNotesState, "setTacticalNotes"), [createLoggedEvaluationSetter]);
 
   // Invocar custom hooks para el Demo Mode / Firebase
   const { data: coachStudents, saveAttendance: reportAttendance, saveEvaluation: reportEvaluation, getLatestEvaluation, updateStudentLevel } = useCoach();
@@ -76,7 +102,7 @@ export default function CoachDashboard() {
     setDiscipline(DEFAULT_EVALUATION_VALUES.discipline);
     setHealthStatus(DEFAULT_EVALUATION_VALUES.healthStatus);
     setTacticalNotes(DEFAULT_EVALUATION_VALUES.tacticalNotes);
-  }, []);
+  }, [setDiscipline, setDribbling, setHealthStatus, setPassing, setPhysical, setShooting, setSpeed, setTacticalNotes]);
 
   const handleLevelChange = async (studentId, level) => {
     if (updatingLevelStudentIdsRef.current[studentId]) return;
@@ -142,7 +168,6 @@ export default function CoachDashboard() {
 
   // Pre-cargar la última evaluación técnica cuando se selecciona un alumno
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     if (!selectedStudent) {
       resetEvaluationFormToDefaults();
       return;
@@ -182,8 +207,7 @@ export default function CoachDashboard() {
     return () => {
       isCurrentSelection = false;
     };
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [selectedStudent, getLatestEvaluation, resetEvaluationFormToDefaults]);
+  }, [selectedStudent, getLatestEvaluation, resetEvaluationFormToDefaults, setDiscipline, setDribbling, setHealthStatus, setPassing, setPhysical, setShooting, setSpeed, setTacticalNotes]);
 
   // Manejar el click de asistencia con alertas de salud para lesionados
   const handleAttendanceClick = (athlete, newStatus) => {
@@ -264,9 +288,6 @@ export default function CoachDashboard() {
       });
       setTimeout(() => {
         setEvaluationSaved(false);
-        // Resetear sliders
-        setSpeed(7); setPassing(8); setDribbling(6); setShooting(7); setPhysical(8); setDiscipline(9);
-        setTacticalNotes("");
       }, 3000);
     } catch (err) {
       console.log("[CLIENT] ERROR", {
