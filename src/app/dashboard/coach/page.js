@@ -149,8 +149,7 @@ export default function CoachDashboard() {
     }
 
     let isCurrentSelection = true;
-    const student = activeEvaluationStudents.find(s => (s.studentId || s.id) === selectedStudent);
-    const targetStudentId = student?.studentId || student?.id || selectedStudent;
+    const targetStudentId = selectedStudent;
 
     async function preloadLatestEvaluation() {
       try {
@@ -169,7 +168,7 @@ export default function CoachDashboard() {
         setShooting(Number.isFinite(metrics.shooting) ? metrics.shooting : DEFAULT_EVALUATION_VALUES.shooting);
         setPhysical(Number.isFinite(metrics.physical) ? metrics.physical : DEFAULT_EVALUATION_VALUES.physical);
         setDiscipline(Number.isFinite(metrics.discipline) ? metrics.discipline : DEFAULT_EVALUATION_VALUES.discipline);
-        setHealthStatus(latestEvaluation.healthStatus || student?.healthStatus || DEFAULT_EVALUATION_VALUES.healthStatus);
+        setHealthStatus(latestEvaluation.healthStatus || DEFAULT_EVALUATION_VALUES.healthStatus);
         setTacticalNotes(typeof latestEvaluation.tacticalNotes === "string" ? latestEvaluation.tacticalNotes : DEFAULT_EVALUATION_VALUES.tacticalNotes);
       } catch (err) {
         if (!isCurrentSelection) return;
@@ -184,7 +183,7 @@ export default function CoachDashboard() {
       isCurrentSelection = false;
     };
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [selectedStudent, activeEvaluationStudents, getLatestEvaluation, resetEvaluationFormToDefaults]);
+  }, [selectedStudent, getLatestEvaluation, resetEvaluationFormToDefaults]);
 
   // Manejar el click de asistencia con alertas de salud para lesionados
   const handleAttendanceClick = (athlete, newStatus) => {
