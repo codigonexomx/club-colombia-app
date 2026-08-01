@@ -86,9 +86,27 @@ export async function updateStudentLevel(studentId, level) {
     body: JSON.stringify({ studentId, level: level || "" })
   });
 
-  const data = await response.json();
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = { error: "Respuesta no JSON del endpoint" };
+  }
+
   if (!response.ok || !data.success) {
-    throw new Error(data.error || "No fue posible actualizar el nivel.");
+    const error = new Error(data?.error || "No fue posible actualizar el nivel.");
+    error.status = response.status;
+    error.statusText = response.statusText;
+    error.endpointResponse = data;
+    console.error("Error HTTP al actualizar nivel del alumno:", {
+      studentId,
+      requestedLevel: level || "",
+      status: response.status,
+      statusText: response.statusText,
+      endpointResponse: data,
+      error
+    });
+    throw error;
   }
 
   return data;

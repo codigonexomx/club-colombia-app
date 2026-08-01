@@ -29,6 +29,9 @@ export default function CoachDashboard() {
   const [evaluationError, setEvaluationError] = useState("");
   const [isSavingEvaluation, setIsSavingEvaluation] = useState(false);
   const [levelMessage, setLevelMessage] = useState("");
+  const [levelMessageType, setLevelMessageType] = useState("status");
+  const [updatingLevelStudentIds, setUpdatingLevelStudentIds] = useState({});
+  const updatingLevelStudentIdsRef = useRef({});
 
   // Invocar custom hooks para el Demo Mode / Firebase
   const { data: coachStudents, saveAttendance: reportAttendance, saveEvaluation: reportEvaluation, updateStudentLevel } = useCoach();
@@ -41,6 +44,10 @@ export default function CoachDashboard() {
     () => students.filter(student => student.status !== "inactive"),
     [students]
   );
+  const activeEvaluationStudents = useMemo(
+    () => students.filter(student => student.status === "active"),
+    [students]
+  );
   const nowStr = new Date().toISOString().split("T")[0];
   const nextEvent = (calendarEvents || [])
     .filter(e => e.date >= nowStr)
@@ -50,8 +57,16 @@ export default function CoachDashboard() {
     .sort(sortTrainingSchedules);
 
   const handleLevelChange = async (studentId, level) => {
+    if (updatingLevelStudentIdsRef.current[studentId]) return;
+
     try {
       setLevelMessage("");
+      setLevelMessageType("status");
+      updatingLevelStudentIdsRef.current = {
+        ...updatingLevelStudentIdsRef.current,
+        [studentId]: true
+      };
+      setUpdatingLevelStudentIds(prev => ({ ...prev, [studentId]: true }));
       const result = await updateStudentLevel(studentId, level);
       setAttendance(prev => prev.map(athlete => {
         const currentId = athlete.studentId || athlete.id;
@@ -60,7 +75,14 @@ export default function CoachDashboard() {
       setLevelMessage("Nivel actualizado correctamente.");
       setTimeout(() => setLevelMessage(""), 2500);
     } catch (err) {
-      setLevelMessage(err?.message || "No fue posible actualizar el nivel.");
+      console.error("Error al cambiar nivel del alumno:", err);
+      setLevelMessageType("alert");
+      setLevelMessage("No fue posible cambiar el nivel. Inténtalo nuevamente.");
+    } finally {
+      const nextUpdating = { ...updatingLevelStudentIdsRef.current };
+      delete nextUpdating[studentId];
+      updatingLevelStudentIdsRef.current = nextUpdating;
+      setUpdatingLevelStudentIds(nextUpdating);
     }
   };
 
@@ -85,22 +107,24 @@ export default function CoachDashboard() {
   }, [coachStudents, operationalStudents]);
 
   useEffect(() => {
-    if (selectedStudent && !operationalStudents.some(s => (s.studentId || s.id) === selectedStudent)) {
+    if (selectedStudent && !activeEvaluationStudents.some(s => (s.studentId || s.id) === selectedStudent)) {
       setSelectedStudent("");
+      setEvaluationSaved(false);
+      setEvaluationError("Este alumno no está activo y no puede recibir una evaluación.");
     }
-  }, [selectedStudent, operationalStudents]);
+  }, [selectedStudent, activeEvaluationStudents]);
 
   // Pre-cargar estado de salud cuando se selecciona un alumno
   useEffect(() => {
     if (selectedStudent) {
-      const student = operationalStudents.find(s => (s.studentId || s.id) === selectedStudent);
+      const student = activeEvaluationStudents.find(s => (s.studentId || s.id) === selectedStudent);
       if (student && student.healthStatus) {
         setHealthStatus(student.healthStatus);
       } else {
         setHealthStatus("optimal");
       }
     }
-  }, [selectedStudent, operationalStudents]);
+  }, [selectedStudent, activeEvaluationStudents]);
 
   // Manejar el click de asistencia con alertas de salud para lesionados
   const handleAttendanceClick = (athlete, newStatus) => {
@@ -137,10 +161,10 @@ export default function CoachDashboard() {
 
     try {
       setIsSavingEvaluation(true);
-      const selectedStudentDoc = operationalStudents.find(s => (s.studentId || s.id) === selectedStudent);
+      const selectedStudentDoc = activeEvaluationStudents.find(s => (s.studentId || s.id) === selectedStudent);
       if (!selectedStudentDoc || selectedStudentDoc.status !== "active") {
         setSelectedStudent("");
-        setEvaluationError("Este alumno no está disponible para operaciones deportivas.");
+        setEvaluationError("Este alumno no está activo y no puede recibir una evaluación.");
         return;
       }
       const targetStudentId = selectedStudentDoc.studentId || selectedStudentDoc.id;
@@ -270,7 +294,7 @@ export default function CoachDashboard() {
             )}
 
             {levelMessage && (
-              <div className="bg-sky-500/10 border border-sky-500/20 text-sky-300 p-3 rounded-xl text-[10px] animate-fade-in">
+              <div role={levelMessageType} className="bg-sky-500/10 border border-sky-500/20 text-sky-300 p-3 rounded-xl text-[10px] animate-fade-in">
                 {levelMessage}
               </div>
             )}
@@ -331,6 +355,7 @@ export default function CoachDashboard() {
                     <select
                       value={resolveStudentCategoryAndLevel(athlete).level}
                       onChange={(event) => handleLevelChange(athlete.studentId || athlete.id, event.target.value)}
+                      disabled={!!updatingLevelStudentIds[athlete.studentId || athlete.id]}
                       className="bg-[#07090e] border border-slate-800 rounded-lg px-2 py-2 text-[9px] text-slate-300 focus:outline-none focus:border-emerald-500"
                       aria-label={`Nivel de ${athlete.name}`}
                     >
@@ -411,10 +436,10 @@ export default function CoachDashboard() {
                 className="w-full bg-[#07090e]/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 appearance-none transition-all"
               >
                 <option value="">-- Seleccionar Atleta --</option>
-                {operationalStudents.length === 0 && (
-                  <option value="" disabled>Aún no hay registros</option>
+                {activeEvaluationStudents.length === 0 && (
+                  <option value="" disabled>No hay alumnos activos disponibles</option>
                 )}
-                {operationalStudents.map((s) => (
+                {activeEvaluationStudents.map((s) => (
                   <option key={s.id} value={s.studentId || s.id}>{s.name} - {resolveStudentCategoryAndLevel(s).level ? LEVEL_OPTIONS.find(level => level.value === resolveStudentCategoryAndLevel(s).level)?.label : "Sin nivel"}</option>
                 ))}
               </select>
