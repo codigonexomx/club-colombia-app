@@ -1,6 +1,6 @@
 // src/services/firebase/coach.js
 
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { collection, doc, onSnapshot, getDocs, setDoc, query, where, orderBy, limit } from "firebase/firestore";
 
 /**
@@ -37,11 +37,22 @@ export function subscribeStudentsList(callback, onError) {
  */
 export async function saveAttendanceReport(records) {
   const dateStr = new Date().toLocaleDateString("es-CO");
+  const currentUser = auth.currentUser;
+  const categories = [...new Set(records.map(a => a.category).filter(Boolean))];
   const docRef = doc(db, "attendance", `attendance-${dateStr.replace(/\//g, "-")}`);
   await setDoc(docRef, {
     date: dateStr,
-    category: "Sin información disponible",
-    records: records.map(a => ({ name: a.name, status: a.status || "P" })),
+    category: categories.length === 1 ? categories[0] : categories.length > 1 ? "Múltiples categorías" : "Sin información disponible",
+    coachId: currentUser?.uid || "",
+    coachName: currentUser?.displayName || currentUser?.email || "",
+    records: records.map(a => ({
+      studentId: a.studentId || a.id || "",
+      studentName: a.name || "",
+      name: a.name,
+      status: a.status || "P",
+      level: a.level || null,
+      healthStatus: a.healthStatus || "optimal"
+    })),
     timestamp: new Date().toISOString()
   });
   return { success: true };
