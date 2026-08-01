@@ -1,7 +1,7 @@
 // src/services/firebase/coach.js
 
 import { db } from "@/lib/firebase";
-import { collection, doc, onSnapshot, getDocs, setDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, doc, onSnapshot, getDocs, setDoc } from "firebase/firestore";
 
 /**
  * Obtiene la lista de deportistas asignados de la base de datos real.
@@ -51,30 +51,35 @@ export async function saveAttendanceReport(records) {
  * Registra la evaluación técnica y actualiza el estatus de salud del estudiante.
  */
 export async function saveTechnicalEvaluation(evaluationData) {
-  const { studentId, studentName, metrics, tacticalNotes, healthStatus } = evaluationData;
-  const batch = writeBatch(db);
-  const evaluationRef = doc(collection(db, "evaluations"));
-  const studentRef = doc(db, "students", studentId);
-
-  batch.set(evaluationRef, {
-    studentId,
-    studentName,
-    metrics,
-    tacticalNotes,
-    healthStatus,
-    date: new Date().toLocaleDateString("es-CO"),
-    timestamp: new Date().toISOString(),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+  const response = await fetch("/api/coach/evaluations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(evaluationData)
   });
 
-  batch.update(studentRef, {
-    healthStatus,
-    updatedAt: serverTimestamp()
-  });
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = { message: "Respuesta no JSON del endpoint" };
+  }
 
-  await batch.commit();
-  return { success: true };
+  if (!response.ok || !data.success) {
+    const error = new Error(data?.message || "No fue posible guardar la evaluación.");
+    error.status = response.status;
+    error.statusText = response.statusText;
+    error.endpointResponse = data;
+    console.error("Error HTTP al guardar evaluación técnica:", {
+      studentId: evaluationData?.studentId || "",
+      status: response.status,
+      statusText: response.statusText,
+      endpointResponse: data,
+      error
+    });
+    throw error;
+  }
+
+  return data;
 }
 
 export async function updateStudentLevel(studentId, level) {
