@@ -27,6 +27,11 @@ export async function saveTechnicalEvaluation(evaluationData) {
   return { success: true };
 }
 
+export async function getLatestEvaluationByStudentId() {
+  await new Promise((resolve) => setTimeout(resolve, demoConfig.behavior.simulatedLatency));
+  return null;
+}
+
 export async function updateStudentLevel(studentId, level) {
   await new Promise((resolve) => setTimeout(resolve, demoConfig.behavior.simulatedLatency));
   console.log(`[DEMO MODE] Nivel actualizado para ${studentId}: ${level || "sin nivel"}`);

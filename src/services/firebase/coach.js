@@ -1,7 +1,7 @@
 // src/services/firebase/coach.js
 
 import { db } from "@/lib/firebase";
-import { collection, doc, onSnapshot, getDocs, setDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, getDocs, setDoc, query, where, orderBy, limit } from "firebase/firestore";
 
 /**
  * Obtiene la lista de deportistas asignados de la base de datos real.
@@ -93,6 +93,23 @@ export async function saveTechnicalEvaluation(evaluationData) {
   });
 
   return data;
+}
+
+export async function getLatestEvaluationByStudentId(studentId) {
+  if (!studentId) return null;
+
+  const q = query(
+    collection(db, "evaluations"),
+    where("studentId", "==", studentId),
+    orderBy("timestamp", "desc"),
+    limit(1)
+  );
+  const querySnapshot = await getDocs(q);
+
+  if (querySnapshot.empty) return null;
+
+  const docSnapshot = querySnapshot.docs[0];
+  return { id: docSnapshot.id, ...docSnapshot.data() };
 }
 
 export async function updateStudentLevel(studentId, level) {

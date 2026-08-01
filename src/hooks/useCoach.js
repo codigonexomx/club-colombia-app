@@ -3,7 +3,7 @@ import { CoachService } from "@/services/coach";
 
 /**
  * Custom Hook para gestionar las acciones del portal del entrenador en tiempo real.
- * @returns {{ data: array, loading: boolean, error: any, refresh: function, saveAttendance: function, saveEvaluation: function }}
+ * @returns {{ data: array, loading: boolean, error: any, refresh: function, saveAttendance: function, saveEvaluation: function, getLatestEvaluation: function }}
  */
 export function useCoach() {
   const [data, setData] = useState([]);
@@ -24,6 +24,7 @@ export function useCoach() {
   }, []);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     setLoading(true);
     setError(null);
 
@@ -41,6 +42,7 @@ export function useCoach() {
     return () => {
       unsubscribe();
     };
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const saveAttendance = useCallback(async (records) => {
@@ -57,6 +59,16 @@ export function useCoach() {
     setError(null);
     try {
       return await CoachService.saveTechnicalEvaluation(evaluationData);
+    } catch (err) {
+      setError(err);
+      throw err;
+    }
+  }, []);
+
+  const getLatestEvaluation = useCallback(async (studentId) => {
+    setError(null);
+    try {
+      return await CoachService.getLatestEvaluationByStudentId(studentId);
     } catch (err) {
       setError(err);
       throw err;
@@ -85,6 +97,7 @@ export function useCoach() {
     refresh: fetchStudents,
     saveAttendance,
     saveEvaluation,
+    getLatestEvaluation,
     updateStudentLevel
   };
 }

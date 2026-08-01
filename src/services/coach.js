@@ -29,6 +29,12 @@ export const CoachService = {
       : FirebaseCoach.saveTechnicalEvaluation(evaluationData);
   },
 
+  getLatestEvaluationByStudentId: (studentId) => {
+    return isDemoActive()
+      ? DemoCoach.getLatestEvaluationByStudentId(studentId)
+      : FirebaseCoach.getLatestEvaluationByStudentId(studentId);
+  },
+
   updateStudentLevel: (studentId, level) => {
     return isDemoActive()
       ? DemoCoach.updateStudentLevel(studentId, level)

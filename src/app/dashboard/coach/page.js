@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ShieldCheck, LogOut, Check, X, AlertCircle, Dumbbell, ClipboardList, TrendingUp, Send, Star, Volume2 } from "lucide-react";
 import { useCoach, useCalendar } from "@/hooks";
@@ -10,6 +10,17 @@ import LevelBadge from "@/components/LevelBadge";
 import { LEVEL_OPTIONS, resolveStudentCategoryAndLevel } from "@/lib/levelModel";
 import { getWeekdayLabel, sortTrainingSchedules } from "@/lib/trainingScheduleModel";
 
+const DEFAULT_EVALUATION_VALUES = {
+  speed: 7,
+  passing: 8,
+  dribbling: 6,
+  shooting: 7,
+  physical: 8,
+  discipline: 9,
+  healthStatus: "optimal",
+  tacticalNotes: ""
+};
+
 export default function CoachDashboard() {
   const [attendance, setAttendance] = useState([]);
   const [activeTab, setActiveTab] = useState("attendance"); // 'attendance' | 'evaluation'
@@ -17,14 +28,14 @@ export default function CoachDashboard() {
 
   // Estados para evaluación técnica y salud
   const [selectedStudent, setSelectedStudent] = useState("");
-  const [speed, setSpeed] = useState(7);
-  const [passing, setPassing] = useState(8);
-  const [dribbling, setDribbling] = useState(6);
-  const [shooting, setShooting] = useState(7);
-  const [physical, setPhysical] = useState(8);
-  const [discipline, setDiscipline] = useState(9);
-  const [healthStatus, setHealthStatus] = useState("optimal"); // 'optimal' | 'fatigue' | 'injured'
-  const [tacticalNotes, setTacticalNotes] = useState("");
+  const [speed, setSpeed] = useState(DEFAULT_EVALUATION_VALUES.speed);
+  const [passing, setPassing] = useState(DEFAULT_EVALUATION_VALUES.passing);
+  const [dribbling, setDribbling] = useState(DEFAULT_EVALUATION_VALUES.dribbling);
+  const [shooting, setShooting] = useState(DEFAULT_EVALUATION_VALUES.shooting);
+  const [physical, setPhysical] = useState(DEFAULT_EVALUATION_VALUES.physical);
+  const [discipline, setDiscipline] = useState(DEFAULT_EVALUATION_VALUES.discipline);
+  const [healthStatus, setHealthStatus] = useState(DEFAULT_EVALUATION_VALUES.healthStatus); // 'optimal' | 'fatigue' | 'injured'
+  const [tacticalNotes, setTacticalNotes] = useState(DEFAULT_EVALUATION_VALUES.tacticalNotes);
   const [evaluationSaved, setEvaluationSaved] = useState(false);
   const [evaluationError, setEvaluationError] = useState("");
   const [isSavingEvaluation, setIsSavingEvaluation] = useState(false);
@@ -34,7 +45,7 @@ export default function CoachDashboard() {
   const updatingLevelStudentIdsRef = useRef({});
 
   // Invocar custom hooks para el Demo Mode / Firebase
-  const { data: coachStudents, saveAttendance: reportAttendance, saveEvaluation: reportEvaluation, updateStudentLevel } = useCoach();
+  const { data: coachStudents, saveAttendance: reportAttendance, saveEvaluation: reportEvaluation, getLatestEvaluation, updateStudentLevel } = useCoach();
   const { data: calendarEvents } = useCalendar();
   const { schedules: allTrainingSchedules } = useTrainingSchedules({ includeCoaches: false });
 
@@ -55,6 +66,17 @@ export default function CoachDashboard() {
   const weeklySchedules = (allTrainingSchedules || [])
     .filter(schedule => schedule.active)
     .sort(sortTrainingSchedules);
+
+  const resetEvaluationFormToDefaults = useCallback(() => {
+    setSpeed(DEFAULT_EVALUATION_VALUES.speed);
+    setPassing(DEFAULT_EVALUATION_VALUES.passing);
+    setDribbling(DEFAULT_EVALUATION_VALUES.dribbling);
+    setShooting(DEFAULT_EVALUATION_VALUES.shooting);
+    setPhysical(DEFAULT_EVALUATION_VALUES.physical);
+    setDiscipline(DEFAULT_EVALUATION_VALUES.discipline);
+    setHealthStatus(DEFAULT_EVALUATION_VALUES.healthStatus);
+    setTacticalNotes(DEFAULT_EVALUATION_VALUES.tacticalNotes);
+  }, []);
 
   const handleLevelChange = async (studentId, level) => {
     if (updatingLevelStudentIdsRef.current[studentId]) return;
@@ -118,19 +140,51 @@ export default function CoachDashboard() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [selectedStudent, activeEvaluationStudents]);
 
-  // Pre-cargar estado de salud cuando se selecciona un alumno
+  // Pre-cargar la última evaluación técnica cuando se selecciona un alumno
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    if (selectedStudent) {
-      const student = activeEvaluationStudents.find(s => (s.studentId || s.id) === selectedStudent);
-      if (student && student.healthStatus) {
-        setHealthStatus(student.healthStatus);
-      } else {
-        setHealthStatus("optimal");
+    if (!selectedStudent) {
+      resetEvaluationFormToDefaults();
+      return;
+    }
+
+    let isCurrentSelection = true;
+    const student = activeEvaluationStudents.find(s => (s.studentId || s.id) === selectedStudent);
+    const targetStudentId = student?.studentId || student?.id || selectedStudent;
+
+    async function preloadLatestEvaluation() {
+      try {
+        const latestEvaluation = await getLatestEvaluation(targetStudentId);
+        if (!isCurrentSelection) return;
+
+        if (!latestEvaluation) {
+          resetEvaluationFormToDefaults();
+          return;
+        }
+
+        const metrics = latestEvaluation.metrics || {};
+        setSpeed(Number.isFinite(metrics.speed) ? metrics.speed : DEFAULT_EVALUATION_VALUES.speed);
+        setPassing(Number.isFinite(metrics.passing) ? metrics.passing : DEFAULT_EVALUATION_VALUES.passing);
+        setDribbling(Number.isFinite(metrics.dribbling) ? metrics.dribbling : DEFAULT_EVALUATION_VALUES.dribbling);
+        setShooting(Number.isFinite(metrics.shooting) ? metrics.shooting : DEFAULT_EVALUATION_VALUES.shooting);
+        setPhysical(Number.isFinite(metrics.physical) ? metrics.physical : DEFAULT_EVALUATION_VALUES.physical);
+        setDiscipline(Number.isFinite(metrics.discipline) ? metrics.discipline : DEFAULT_EVALUATION_VALUES.discipline);
+        setHealthStatus(latestEvaluation.healthStatus || student?.healthStatus || DEFAULT_EVALUATION_VALUES.healthStatus);
+        setTacticalNotes(typeof latestEvaluation.tacticalNotes === "string" ? latestEvaluation.tacticalNotes : DEFAULT_EVALUATION_VALUES.tacticalNotes);
+      } catch (err) {
+        if (!isCurrentSelection) return;
+        console.error("Error al cargar la última evaluación del alumno:", err);
+        resetEvaluationFormToDefaults();
       }
     }
+
+    preloadLatestEvaluation();
+
+    return () => {
+      isCurrentSelection = false;
+    };
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [selectedStudent, activeEvaluationStudents]);
+  }, [selectedStudent, activeEvaluationStudents, getLatestEvaluation, resetEvaluationFormToDefaults]);
 
   // Manejar el click de asistencia con alertas de salud para lesionados
   const handleAttendanceClick = (athlete, newStatus) => {
