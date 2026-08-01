@@ -39,7 +39,7 @@ export default function CoachDashboard() {
   const { schedules: allTrainingSchedules } = useTrainingSchedules({ includeCoaches: false });
 
   // DECLARACIÓN DE CONSTANTES DERIVADAS DE LOS HOOKS (REEMPLAZANDO USESTATES REDUNDANTES)
-  const students = coachStudents || [];
+  const students = useMemo(() => coachStudents || [], [coachStudents]);
   const operationalStudents = useMemo(
     () => students.filter(student => student.status !== "inactive"),
     [students]
@@ -87,6 +87,7 @@ export default function CoachDashboard() {
   };
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (coachStudents) {
       // Inicializar estado de asistencia si aún no se ha modificado manualmente
       setAttendance(prev => {
@@ -104,18 +105,22 @@ export default function CoachDashboard() {
         });
       });
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [coachStudents, operationalStudents]);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (selectedStudent && !activeEvaluationStudents.some(s => (s.studentId || s.id) === selectedStudent)) {
       setSelectedStudent("");
       setEvaluationSaved(false);
       setEvaluationError("Este alumno no está activo y no puede recibir una evaluación.");
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [selectedStudent, activeEvaluationStudents]);
 
   // Pre-cargar estado de salud cuando se selecciona un alumno
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (selectedStudent) {
       const student = activeEvaluationStudents.find(s => (s.studentId || s.id) === selectedStudent);
       if (student && student.healthStatus) {
@@ -124,6 +129,7 @@ export default function CoachDashboard() {
         setHealthStatus("optimal");
       }
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [selectedStudent, activeEvaluationStudents]);
 
   // Manejar el click de asistencia con alertas de salud para lesionados
@@ -149,12 +155,27 @@ export default function CoachDashboard() {
   // Guardar reporte de evaluación técnica en histórico
   const saveEvaluation = async (e) => {
     e.preventDefault();
-    if (isSavingEvaluation) return;
+    console.log("[CLIENT] SAVE_STARTED", {
+      selectedStudent,
+      isSavingEvaluation
+    });
+    if (isSavingEvaluation) {
+      console.log("[CLIENT] FINALLY", {
+        reason: "already_saving_return"
+      });
+      return;
+    }
 
     setEvaluationSaved(false);
     setEvaluationError("");
 
     if (!selectedStudent) {
+      console.log("[CLIENT] ERROR", {
+        reason: "missing_selectedStudent"
+      });
+      console.log("[CLIENT] FINALLY", {
+        reason: "missing_selectedStudent"
+      });
       setEvaluationError("Selecciona un alumno antes de guardar la evaluación.");
       return;
     }
@@ -163,6 +184,10 @@ export default function CoachDashboard() {
       setIsSavingEvaluation(true);
       const selectedStudentDoc = activeEvaluationStudents.find(s => (s.studentId || s.id) === selectedStudent);
       if (!selectedStudentDoc || selectedStudentDoc.status !== "active") {
+        console.log("[CLIENT] ERROR", {
+          reason: "inactive_or_missing_student",
+          selectedStudent
+        });
         setSelectedStudent("");
         setEvaluationError("Este alumno no está activo y no puede recibir una evaluación.");
         return;
@@ -180,6 +205,10 @@ export default function CoachDashboard() {
       });
 
       setEvaluationSaved(true);
+      console.log("[CLIENT] SUCCESS", {
+        studentId: targetStudentId,
+        studentName: targetName
+      });
       setTimeout(() => {
         setEvaluationSaved(false);
         // Resetear sliders
@@ -187,9 +216,16 @@ export default function CoachDashboard() {
         setTacticalNotes("");
       }, 3000);
     } catch (err) {
-      console.error("Error al guardar evaluación:", err);
+      console.log("[CLIENT] ERROR", {
+        message: err?.message || String(err),
+        status: err?.status || "",
+        statusText: err?.statusText || ""
+      });
       setEvaluationError("No fue posible guardar la evaluación. Verifica tu conexión e inténtalo nuevamente.");
     } finally {
+      console.log("[CLIENT] FINALLY", {
+        willSetIsSavingEvaluationFalse: true
+      });
       setIsSavingEvaluation(false);
     }
   };
@@ -560,6 +596,9 @@ export default function CoachDashboard() {
 
             <button
               type="submit"
+              onClick={() => {
+                console.log("[CLIENT] CLICK");
+              }}
               disabled={isSavingEvaluation}
               aria-busy={isSavingEvaluation}
               className={`w-full bg-gradient-to-r from-amber-600 to-amber-400 hover:from-amber-500 hover:to-amber-300 text-slate-950 font-display font-black text-sm py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_25px_rgba(245,158,11,0.5)] mt-4 ${

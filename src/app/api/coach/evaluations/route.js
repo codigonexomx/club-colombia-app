@@ -13,7 +13,30 @@ function isAllowedRole(role) {
   return role === "admin" || role === "coach";
 }
 
-function jsonError(message, status) {
+function logServerError({ studentId = "", coachId = "", status, error = null, message = "" }) {
+  console.log("[SERVER] ERROR", {
+    studentId,
+    coachId,
+    status,
+    code: error?.code || "",
+    message: error?.message || message,
+    stack: error?.stack || ""
+  });
+}
+
+function jsonError(message, status, context = {}) {
+  logServerError({
+    studentId: context.studentId || "",
+    coachId: context.coachId || "",
+    status,
+    error: context.error || null,
+    message
+  });
+  console.log("[SERVER] Respuesta enviada", {
+    success: false,
+    status,
+    message
+  });
   return NextResponse.json({ success: false, message }, { status });
 }
 
@@ -41,64 +64,93 @@ function validateMetrics(metrics) {
 }
 
 export async function POST(request) {
+  let studentId = "";
+  let coachId = "";
+
   try {
+    console.log("[SERVER] Request recibida");
     const session = await getVerifiedSessionFromRequest(request);
     if (!session) {
       return jsonError("No autenticado", 401);
     }
+    coachId = session.uid || "";
+    console.log("[SERVER] Sesión validada", {
+      coachId
+    });
 
     if (!isAllowedRole(session.role)) {
-      return jsonError("No autorizado", 403);
+      return jsonError("No autorizado", 403, { coachId });
     }
+    console.log("[SERVER] Rol validado", {
+      role: session.role
+    });
 
     let body;
     try {
       body = await request.json();
-    } catch {
-      return jsonError("Payload JSON inválido", 400);
+    } catch (error) {
+      return jsonError("Payload JSON inválido", 400, { coachId, error });
     }
+    console.log("[SERVER] Payload recibido", {
+      studentId: typeof body?.studentId === "string" ? body.studentId : "",
+      studentName: typeof body?.studentName === "string" ? body.studentName : "",
+      metrics: body?.metrics || null,
+      healthStatus: typeof body?.healthStatus === "string" ? body.healthStatus : "",
+      tacticalNotesLength: typeof body?.tacticalNotes === "string" ? body.tacticalNotes.length : null
+    });
 
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return jsonError("Payload inválido", 400);
+      return jsonError("Payload inválido", 400, { coachId });
     }
 
-    const studentId = typeof body.studentId === "string" ? body.studentId.trim() : "";
+    studentId = typeof body.studentId === "string" ? body.studentId.trim() : "";
     const tacticalNotes = typeof body.tacticalNotes === "string" ? body.tacticalNotes : null;
     const healthStatus = typeof body.healthStatus === "string" ? body.healthStatus.trim() : "";
     const metricsResult = validateMetrics(body.metrics);
 
     if (!studentId) {
-      return jsonError("studentId es obligatorio", 400);
+      return jsonError("studentId es obligatorio", 400, { studentId, coachId });
     }
 
     if (typeof body.studentName !== "string") {
-      return jsonError("studentName debe ser texto", 400);
+      return jsonError("studentName debe ser texto", 400, { studentId, coachId });
     }
 
     if (!metricsResult.ok) {
-      return jsonError(metricsResult.message, 400);
+      return jsonError(metricsResult.message, 400, { studentId, coachId });
     }
 
     if (tacticalNotes === null) {
-      return jsonError("tacticalNotes debe ser texto", 400);
+      return jsonError("tacticalNotes debe ser texto", 400, { studentId, coachId });
     }
 
     if (!HEALTH_STATUSES.has(healthStatus)) {
-      return jsonError("healthStatus no válido", 400);
+      return jsonError("healthStatus no válido", 400, { studentId, coachId });
     }
+    console.log("[SERVER] Payload validado", {
+      studentId,
+      metricKeys: Object.keys(metricsResult.metrics),
+      healthStatus
+    });
 
     const db = getAdminDb();
     const studentRef = db.collection("students").doc(studentId);
     const studentSnap = await studentRef.get();
 
     if (!studentSnap.exists) {
-      return jsonError("Alumno no encontrado", 404);
+      return jsonError("Alumno no encontrado", 404, { studentId, coachId });
     }
+    console.log("[SERVER] Alumno encontrado", {
+      studentId
+    });
 
     const student = studentSnap.data();
     if (student.status !== "active") {
-      return jsonError("El alumno no está activo y no puede recibir una evaluación.", 409);
+      return jsonError("El alumno no está activo y no puede recibir una evaluación.", 409, { studentId, coachId });
     }
+    console.log("[SERVER] Alumno activo", {
+      studentId
+    });
 
     const evaluationRef = db.collection("evaluations").doc();
     const now = new Date();
@@ -117,13 +169,31 @@ export async function POST(request) {
     };
 
     const batch = db.batch();
+    console.log("[SERVER] Batch creado", {
+      evaluationId: evaluationRef.id,
+      studentId
+    });
     batch.set(evaluationRef, evaluationData);
     batch.update(studentRef, {
       healthStatus,
       updatedAt: FieldValue.serverTimestamp()
     });
+    console.log("[SERVER] Batch commit iniciado", {
+      evaluationId: evaluationRef.id,
+      studentId
+    });
     await batch.commit();
+    console.log("[SERVER] Batch commit exitoso", {
+      evaluationId: evaluationRef.id,
+      studentId
+    });
 
+    console.log("[SERVER] Respuesta enviada", {
+      success: true,
+      evaluationId: evaluationRef.id,
+      studentId,
+      healthStatus
+    });
     return NextResponse.json({
       success: true,
       evaluationId: evaluationRef.id,
@@ -131,7 +201,6 @@ export async function POST(request) {
       healthStatus
     });
   } catch (error) {
-    console.error("Error al guardar evaluación del entrenador:", error);
-    return jsonError("No fue posible guardar la evaluación", 500);
+    return jsonError("No fue posible guardar la evaluación", 500, { studentId, coachId, error });
   }
 }

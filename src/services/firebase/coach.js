@@ -51,10 +51,19 @@ export async function saveAttendanceReport(records) {
  * Registra la evaluación técnica y actualiza el estatus de salud del estudiante.
  */
 export async function saveTechnicalEvaluation(evaluationData) {
+  console.log("[CLIENT] FETCH_STARTED", {
+    url: "/api/coach/evaluations",
+    method: "POST",
+    studentId: evaluationData?.studentId || ""
+  });
   const response = await fetch("/api/coach/evaluations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(evaluationData)
+  });
+  console.log("[CLIENT] HTTP_RESPONSE", {
+    status: response.status,
+    statusText: response.statusText
   });
 
   let data = null;
@@ -69,15 +78,19 @@ export async function saveTechnicalEvaluation(evaluationData) {
     error.status = response.status;
     error.statusText = response.statusText;
     error.endpointResponse = data;
-    console.error("Error HTTP al guardar evaluación técnica:", {
+    console.log("[CLIENT] ERROR", {
       studentId: evaluationData?.studentId || "",
       status: response.status,
       statusText: response.statusText,
-      endpointResponse: data,
-      error
+      message: error.message
     });
     throw error;
   }
+
+  console.log("[CLIENT] SUCCESS", {
+    studentId: evaluationData?.studentId || "",
+    evaluationId: data.evaluationId || ""
+  });
 
   return data;
 }
