@@ -14,7 +14,10 @@ import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } f
 
 export default function Login() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("login"); // 'login' | 'register'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") return "login";
+    return new URLSearchParams(window.location.search).get("tab") === "register" ? "register" : "login";
+  }); // 'login' | 'register'
   const resetRequestInFlightRef = useRef(false);
   
   // Estados de Autenticación
@@ -50,10 +53,14 @@ export default function Login() {
   const [birthDate, setBirthDate] = useState("");
   const [studentCategory, setStudentCategory] = useState(null);
   const [registerError, setRegisterError] = useState("");
+  const [registeredStudentLinked, setRegisteredStudentLinked] = useState(false);
+  const [registrationToken, setRegistrationToken] = useState("");
 
   // Limpiar cookies de sesión para asegurar que al estar en /login el usuario está deslogueado
   React.useEffect(() => {
     if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("tab") === "register") return;
       fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
     }
   }, []);
@@ -135,6 +142,7 @@ export default function Login() {
   }, []);
 
   // Limpiar reCAPTCHA al cambiar de pestañas, tipo de usuario o formulario de recuperación
+  /* eslint-disable react-hooks/set-state-in-effect */
   React.useEffect(() => {
     cleanupRecaptcha();
     setPhoneCodeSent(false);
@@ -142,17 +150,34 @@ export default function Login() {
     setSmsCode("");
     setLoginError("");
   }, [activeTab, loginUserType, showForgotPassword]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Leer query params al cargar
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get("tab");
-      if (tab === "register") {
-        setActiveTab("register");
+    if (activeTab !== "register") return;
+
+    let cancelled = false;
+    const loadParentSession = async () => {
+      try {
+        const response = await fetch("/api/auth/session");
+        if (!response.ok) return;
+        const session = await response.json();
+        if (cancelled || session.role !== "parent" || !session.uid) return;
+        setParentUid(session.uid);
+        if (session.phone) {
+          setParentPhone(prev => prev || session.phone);
+          setLoginPhone(session.phone);
+        }
+      } catch (err) {
+        console.warn("No se encontró sesión activa de acudiente para inscripción:", err);
       }
-    }
-  }, []);
+    };
+
+    loadParentSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   // Calcular categoría recomendada
   const handleBirthDateChange = (e) => {
@@ -211,7 +236,8 @@ export default function Login() {
           updatedAt: serverTimestamp()
         });
         setStudentId(newStudentId);
-        setParentUid("");
+        setRegisteredStudentLinked(false);
+        setRegistrationToken(`CC-2026-${Math.floor(1000 + Math.random() * 9000)}`);
         
         localStorage.setItem("simulatedStatus", "suspended");
         
@@ -221,6 +247,21 @@ export default function Login() {
         setRegisterError("Ocurrió un error al registrar al alumno: " + err.message);
       }
     }
+  };
+
+  const linkRegisteredStudentToParent = async (targetStudentId) => {
+    const response = await fetch("/api/parent/link-student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId: targetStudentId })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "No fue posible vincular el alumno con la cuenta del acudiente.");
+    }
+    setParentUid(data.parentUid || "");
+    setRegisteredStudentLinked(true);
+    return data;
   };
 
   const handlePaymentCompleted = async (amount, paymentLabel) => {
@@ -254,6 +295,10 @@ export default function Login() {
         updatedAt: serverTimestamp()
       });
 
+      if (parentUid && !registeredStudentLinked) {
+        await linkRegisteredStudentToParent(studentId);
+      }
+
       localStorage.setItem("simulatedStatus", "pending_validation");
 
       setRegisterStep(3);
@@ -261,6 +306,32 @@ export default function Login() {
       console.error("Error al reportar pago:", err);
       setRegisterError("Error al reportar el pago en la base de datos: " + err.message);
     }
+  };
+
+  const handleGoToParentPortal = async () => {
+    setRegisterError("");
+
+    if (parentUid && studentId) {
+      try {
+        if (!registeredStudentLinked) {
+          await linkRegisteredStudentToParent(studentId);
+        }
+        router.push("/dashboard/parent");
+        return;
+      } catch (err) {
+        setRegisterError(err.message || "No fue posible vincular tu cuenta con el alumno registrado.");
+        return;
+      }
+    }
+
+    setActiveTab("login");
+    setLoginUserType("parent");
+    setLoginPhone(parentPhone);
+    setPhoneCodeSent(false);
+    setConfirmationResult(null);
+    setSmsCode("");
+    setLoginError("");
+    setRegisterStep(1);
   };
 
   const handlePasswordResetSubmit = async (e) => {
@@ -796,17 +867,23 @@ export default function Login() {
                   </p>
                 </div>
 
-                <QRGenerator 
-                  studentName={studentName} 
-                  status="pending_validation" 
-                  token={`CC-2026-${Math.floor(1000 + Math.random() * 9000)}`} 
+                {registerError && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-[11px] text-center">
+                    {registerError}
+                  </div>
+                )}
+
+                <QRGenerator
+                  studentName={studentName}
+                  status="pending_validation"
+                  token={registrationToken || "CC-2026-PENDIENTE"}
                 />
 
                 <button
-                  onClick={() => router.push("/dashboard/parent")}
+                  onClick={handleGoToParentPortal}
                   className="w-full bg-[#10b981] hover:bg-[#059669] text-slate-950 font-display font-black text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xl shadow-emerald-500/10 cursor-pointer"
                 >
-                  Ir a Mi Portal (Acceso Restringido)
+                  {parentUid ? "Ir a Mi Portal (Acceso Restringido)" : "Autenticar Teléfono para Entrar"}
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
