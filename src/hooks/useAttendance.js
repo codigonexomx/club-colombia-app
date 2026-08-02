@@ -48,7 +48,7 @@ export function useAttendance(studentId, studentName) {
     });
 
     // 2. Suscribirse a evaluaciones
-    const unsubEval = AttendanceService.subscribeEvaluations(studentName, (list) => {
+    const unsubEval = AttendanceService.subscribeEvaluations(studentId, studentName, (list) => {
       setEvalHistory(list);
       if (list.length > 0) {
         const latest = list[list.length - 1];

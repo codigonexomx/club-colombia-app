@@ -17,10 +17,10 @@ export const AttendanceService = {
       : FirebaseAttendance.subscribeAttendanceHistory(studentId, studentName, callback);
   },
 
-  subscribeEvaluations: (studentName, callback) => {
+  subscribeEvaluations: (studentId, studentName, callback) => {
     return isDemoActive()
-      ? DemoAttendance.subscribeEvaluations(studentName, callback)
-      : FirebaseAttendance.subscribeEvaluations(studentName, callback);
+      ? DemoAttendance.subscribeEvaluations(studentId, studentName, callback)
+      : FirebaseAttendance.subscribeEvaluations(studentId, studentName, callback);
   },
 
   subscribeDrills: (callback) => {

@@ -78,25 +78,64 @@ export function subscribeAttendanceHistory(studentId, studentName, callback) {
 /**
  * Suscribe en tiempo real a las evaluaciones de rendimiento.
  */
-export function subscribeEvaluations(studentName, callback) {
-  if (!studentName) {
+function normalizeEvaluationList(docsById) {
+  const list = [...docsById.values()];
+  list.sort((a, b) => {
+    const tA = a.timestamp || "";
+    const tB = b.timestamp || "";
+    return tA.localeCompare(tB);
+  });
+  return list;
+}
+
+export function subscribeEvaluations(studentId, studentName, callback) {
+  if (!studentId && !studentName) {
     callback([]);
     return () => {};
   }
-  const q = query(collection(db, "evaluations"), where("studentName", "==", studentName));
-  return onSnapshot(q, (snapshot) => {
-    const list = [];
-    snapshot.forEach((doc) => {
-      list.push({ id: doc.id, ...doc.data() });
-    });
-    // Ordenar cronológicamente
-    list.sort((a, b) => {
-      const tA = a.timestamp || "";
-      const tB = b.timestamp || "";
-      return tA.localeCompare(tB);
-    });
-    callback(list);
-  });
+
+  let idDocsById = new Map();
+  let nameDocsById = new Map();
+  let idSnapshotReady = !studentId;
+  let nameSnapshotReady = !studentName;
+  const emitIfReady = () => {
+    if (!idSnapshotReady || !nameSnapshotReady) return;
+    callback(normalizeEvaluationList(new Map([...nameDocsById, ...idDocsById])));
+  };
+  const unsubscribers = [];
+
+  if (studentId) {
+    const byStudentId = query(collection(db, "evaluations"), where("studentId", "==", studentId));
+    unsubscribers.push(onSnapshot(byStudentId, (snapshot) => {
+      const nextDocs = new Map();
+      snapshot.forEach((doc) => {
+        nextDocs.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      idDocsById = nextDocs;
+      idSnapshotReady = true;
+      emitIfReady();
+    }));
+  }
+
+  if (studentName) {
+    const byStudentName = query(collection(db, "evaluations"), where("studentName", "==", studentName));
+    unsubscribers.push(onSnapshot(byStudentName, (snapshot) => {
+      const nextDocs = new Map();
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (!data.studentId || data.studentId === studentId) {
+          nextDocs.set(doc.id, { id: doc.id, ...data });
+        }
+      });
+      nameDocsById = nextDocs;
+      nameSnapshotReady = true;
+      emitIfReady();
+    }));
+  }
+
+  return () => {
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
 }
 
 /**

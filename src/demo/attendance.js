@@ -15,12 +15,13 @@ export function subscribeAttendanceHistory(studentId, studentName, callback) {
   return () => {};
 }
 
-export function subscribeEvaluations(studentName, callback) {
+export function subscribeEvaluations(studentId, studentName, callback) {
   const data = getActiveDemoData();
   // Retornar un historial ficticio con la última evaluación
   callback([
     {
       id: "demo-eval-1",
+      studentId: studentId || data.student.studentId || data.student.id,
       studentName: studentName || data.student.name,
       timestamp: "2026-07-10T16:00:00Z",
       metrics: data.performance,
