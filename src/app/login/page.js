@@ -10,7 +10,7 @@ import { auth, db } from "@/lib/firebase";
 import { categoryNameToId, normalizeStudentName } from "@/lib/studentModel";
 import { normalizeAndValidatePhone } from "@/lib/phone";
 import { RecaptchaVerifier, signInWithEmailAndPassword, signInWithPhoneNumber, sendPasswordResetEmail } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 
 export default function Login() {
   const router = useRouter();
@@ -55,6 +55,9 @@ export default function Login() {
   const [registerError, setRegisterError] = useState("");
   const [registeredStudentLinked, setRegisteredStudentLinked] = useState(false);
   const [registrationToken, setRegistrationToken] = useState("");
+  const [registeredStudentStatus, setRegisteredStudentStatus] = useState("");
+  const [registeredStudentStatusLoading, setRegisteredStudentStatusLoading] = useState(false);
+  const [registeredStudentStatusError, setRegisteredStudentStatusError] = useState("");
 
   // Limpiar cookies de sesión para asegurar que al estar en /login el usuario está deslogueado
   React.useEffect(() => {
@@ -179,6 +182,40 @@ export default function Login() {
     };
   }, [activeTab]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
+  React.useEffect(() => {
+    if (registerStep !== 3 || !studentId) {
+      setRegisteredStudentStatusLoading(false);
+      setRegisteredStudentStatusError("");
+      return;
+    }
+
+    setRegisteredStudentStatusLoading(true);
+    setRegisteredStudentStatusError("");
+
+    const unsubscribe = onSnapshot(doc(db, "students", studentId), (studentSnap) => {
+      if (!studentSnap.exists()) {
+        setRegisteredStudentStatus("");
+        setRegisteredStudentStatusError("No fue posible encontrar el alumno registrado.");
+        setRegisteredStudentStatusLoading(false);
+        return;
+      }
+
+      const data = studentSnap.data();
+      setRegisteredStudentStatus(data.status || "pending_validation");
+      setRegisteredStudentStatusLoading(false);
+    }, (err) => {
+      console.error("Error al escuchar el estado del alumno registrado:", err);
+      setRegisteredStudentStatusError("No fue posible actualizar el estado del pago en tiempo real. Intenta recargar la página.");
+      setRegisteredStudentStatusLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [registerStep, studentId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   // Calcular categoría recomendada
   const handleBirthDateChange = (e) => {
     const dateStr = e.target.value;
@@ -237,6 +274,8 @@ export default function Login() {
         });
         setStudentId(newStudentId);
         setRegisteredStudentLinked(false);
+        setRegisteredStudentStatus("suspended");
+        setRegisteredStudentStatusError("");
         setRegistrationToken(`CC-2026-${Math.floor(1000 + Math.random() * 9000)}`);
         
         localStorage.setItem("simulatedStatus", "suspended");
@@ -300,6 +339,8 @@ export default function Login() {
       }
 
       localStorage.setItem("simulatedStatus", "pending_validation");
+      setRegisteredStudentStatus("pending_validation");
+      setRegisteredStudentStatusError("");
 
       setRegisterStep(3);
     } catch (err) {
@@ -333,6 +374,9 @@ export default function Login() {
     setLoginError("");
     setRegisterStep(1);
   };
+
+  const registeredStudentQrStatus = registeredStudentStatus || "pending_validation";
+  const registeredStudentIsActive = registeredStudentQrStatus === "active";
 
   const handlePasswordResetSubmit = async (e) => {
     e.preventDefault();
@@ -857,13 +901,17 @@ export default function Login() {
             {registerStep === 3 && (
               <div className="flex flex-col items-center justify-center space-y-5 animate-fade-in font-sans">
                 <div className="text-center max-w-xs">
-                  <div className="bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1 mb-2">
+                  <div className={`${registeredStudentIsActive ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-500 border border-red-500/20"} px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1 mb-2`}>
                     <QrCode className="w-3.5 h-3.5" />
-                    Pago por Confirmar
+                    {registeredStudentIsActive ? "Pago Aprobado" : "Pago por Confirmar"}
                   </div>
-                  <h2 className="font-display font-black text-base text-slate-100 uppercase tracking-wide">Inscripción Recibida</h2>
+                  <h2 className="font-display font-black text-base text-slate-100 uppercase tracking-wide">
+                    {registeredStudentIsActive ? "Inscripción Activada" : "Inscripción Recibida"}
+                  </h2>
                   <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                    Tus datos y reporte de pago han sido guardados. Una vez que el Profe Luis López valide tu depósito en la cuenta de Banorte, tu portal y credencial QR se activarán automáticamente.
+                    {registeredStudentIsActive
+                      ? "Pago aprobado. Tu inscripción fue activada. Ya puedes continuar con el acceso seguro al Portal del Padre."
+                      : "Tus datos y reporte de pago han sido guardados. Una vez que el Profe Luis López valide tu depósito en la cuenta de Banorte, tu portal y credencial QR se activarán automáticamente."}
                   </p>
                 </div>
 
@@ -873,17 +921,32 @@ export default function Login() {
                   </div>
                 )}
 
+                {registeredStudentStatusLoading && (
+                  <div className="bg-slate-800/50 border border-slate-700 text-slate-400 p-3 rounded-xl text-[11px] text-center">
+                    Actualizando estado de inscripción...
+                  </div>
+                )}
+
+                {registeredStudentStatusError && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-[11px] text-center">
+                    {registeredStudentStatusError}
+                  </div>
+                )}
+
                 <QRGenerator
                   studentName={studentName}
-                  status="pending_validation"
+                  status={registeredStudentQrStatus}
                   token={registrationToken || "CC-2026-PENDIENTE"}
                 />
 
                 <button
                   onClick={handleGoToParentPortal}
-                  className="w-full bg-[#10b981] hover:bg-[#059669] text-slate-950 font-display font-black text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xl shadow-emerald-500/10 cursor-pointer"
+                  disabled={!registeredStudentIsActive || registeredStudentStatusLoading}
+                  className="w-full bg-[#10b981] hover:bg-[#059669] disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-display font-black text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xl shadow-emerald-500/10 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  {parentUid ? "Ir a Mi Portal (Acceso Restringido)" : "Autenticar Teléfono para Entrar"}
+                  {registeredStudentIsActive
+                    ? (parentUid ? "Ir a Mi Portal" : "Autenticar Teléfono para Entrar")
+                    : "Esperando aprobación del pago"}
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
