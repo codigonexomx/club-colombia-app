@@ -447,17 +447,26 @@ export default function Login() {
           setConfirmationResult(result);
           setPhoneCodeSent(true);
         } catch (err) {
-          console.error("Error al solicitar código SMS:", err);
+          console.error("Error al solicitar código SMS:", {
+            code: err?.code || "",
+            message: err?.message || "",
+            name: err?.name || "",
+            normalizedPhone,
+            hostname: typeof window !== "undefined" ? window.location.hostname : "",
+            currentUserUid: auth.currentUser?.uid || "",
+            stack: err?.stack || ""
+          });
           cleanupRecaptcha();
-          if (err.message === "RECAPTCHA_INIT_FAILED" || err.message?.includes("reCAPTCHA")) {
-            setLoginError("No fue posible iniciar la verificación de seguridad. Intenta nuevamente.");
-          } else if (err.code === "auth/too-many-requests") {
-            setLoginError("Has realizado demasiados intentos. Por favor espera unos minutos antes de volver a solicitar un código.");
-          } else if (err.code === "auth/invalid-phone-number") {
-            setLoginError("El número de teléfono ingresado no es válido.");
-          } else {
-            setLoginError("No fue posible iniciar la verificación de seguridad. Intenta nuevamente.");
-          }
+          const authErrorMessages = {
+            "auth/unauthorized-domain": "Este dominio no está autorizado para iniciar sesión.",
+            "auth/operation-not-allowed": "El inicio de sesión por teléfono no está habilitado.",
+            "auth/invalid-phone-number": "El número de teléfono no es válido.",
+            "auth/too-many-requests": "Se hicieron demasiados intentos. Intenta más tarde.",
+            "auth/captcha-check-failed": "No fue posible completar la verificación de seguridad.",
+            "auth/invalid-app-credential": "No fue posible completar la verificación de seguridad.",
+            "auth/network-request-failed": "No fue posible conectarse al servicio de verificación."
+          };
+          setLoginError(authErrorMessages[err?.code] || "No fue posible iniciar la verificación de seguridad. Intenta nuevamente.");
         } finally {
           setIsLoggingIn(false);
           loginRequestInFlightRef.current = false;
