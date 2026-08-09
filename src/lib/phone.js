@@ -1,4 +1,4 @@
-const DEFAULT_REGION_CODE = "57";
+const DEFAULT_REGION_CODE = "52";
 
 export function normalizePhoneNumber(phone, defaultRegionCode = DEFAULT_REGION_CODE) {
   const rawPhone = String(phone || "").trim();
