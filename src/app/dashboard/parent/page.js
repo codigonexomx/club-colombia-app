@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ShieldCheck, LogOut, ChartBar, CreditCard, Image as ImageIcon, Sparkles, Trophy, Calendar, CheckCircle2, Clock, AlertTriangle, Play, Pause, Activity, X, Users } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { signOut } from "firebase/auth";
 import QRGenerator from "@/components/QRGenerator";
 import RadarPerformance from "@/components/RadarPerformance";
 import PaymentSimulator from "@/components/PaymentSimulator";
@@ -12,6 +14,7 @@ import { useTrainingSchedules } from "@/hooks/useTrainingSchedules";
 import LevelBadge from "@/components/LevelBadge";
 import { calculateAttendanceSummary, getAttendanceStatusLabel, sortAttendanceNewestFirst } from "@/lib/attendanceModel";
 import { getWeekdayLabel, trainingScheduleMatchesStudent } from "@/lib/trainingScheduleModel";
+import { auth } from "@/lib/firebase";
 
 const EMPTY_ARRAY = [];
 
@@ -41,6 +44,7 @@ const parseVideoUrl = (url) => {
 };
 
 export default function ParentDashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("performance"); // 'performance' | 'billing' | 'gallery'
   const [activeSubTab, setActiveSubTab] = useState("stats"); // 'stats' | 'calendar' | 'drills'
   const [userEmail, setUserEmail] = useState("");
@@ -68,6 +72,22 @@ export default function ParentDashboard() {
       vid.playbackRate = speed;
       setActivePlaybackRates(prev => ({ ...prev, [drillId]: speed }));
     }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Error al cerrar sesión en Firebase Auth:", err);
+    }
+
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" });
+    } catch (err) {
+      console.error("Error al eliminar la sesión segura:", err);
+    }
+
+    router.push("/login");
   };
 
   // Invocar custom hooks para el Demo Mode / Firebase
@@ -248,13 +268,14 @@ export default function ParentDashboard() {
           >
             Inicio
           </Link>
-          <Link 
-            href="/login"
+          <button
+            type="button"
+            onClick={handleLogout}
             className="text-slate-400 hover:text-[#10b981] font-display font-semibold text-xs flex items-center gap-1.5 transition-all"
           >
             <LogOut className="w-4 h-4" />
             Salir
-          </Link>
+          </button>
         </div>
       </header>
 

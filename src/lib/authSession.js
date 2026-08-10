@@ -1,4 +1,4 @@
-export const SESSION_EXPIRES_IN_MS = 24 * 60 * 60 * 1000;
+export const SESSION_EXPIRES_IN_MS = 14 * 24 * 60 * 60 * 1000;
 export const SESSION_MAX_AGE_SECONDS = SESSION_EXPIRES_IN_MS / 1000;
 
 export function getSessionCookieName() {

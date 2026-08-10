@@ -9,7 +9,7 @@ import QRGenerator from "@/components/QRGenerator";
 import { auth, db } from "@/lib/firebase";
 import { categoryNameToId, normalizeStudentName } from "@/lib/studentModel";
 import { normalizeAndValidatePhone } from "@/lib/phone";
-import { RecaptchaVerifier, signInWithEmailAndPassword, signInWithPhoneNumber, sendPasswordResetEmail } from "firebase/auth";
+import { RecaptchaVerifier, signInWithEmailAndPassword, signInWithPhoneNumber, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 
 export default function Login() {
@@ -59,14 +59,32 @@ export default function Login() {
   const [registeredStudentStatusLoading, setRegisteredStudentStatusLoading] = useState(false);
   const [registeredStudentStatusError, setRegisteredStudentStatusError] = useState("");
 
-  // Limpiar cookies de sesión para asegurar que al estar en /login el usuario está deslogueado
+  // Si el padre ya tiene una sesión segura válida, no pedir SMS otra vez.
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("tab") === "register") return;
-      fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
-    }
-  }, []);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "register") return;
+
+    let cancelled = false;
+    const continueExistingParentSession = async () => {
+      try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!response.ok) return;
+        const session = await response.json();
+        if (!cancelled && session.role === "parent") {
+          router.replace("/dashboard/parent");
+        }
+      } catch (err) {
+        console.warn("No se encontró sesión activa para continuar:", err);
+      }
+    };
+
+    continueExistingParentSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const getAvailableRoles = (user) => {
     if (Array.isArray(user?.roles) && user.roles.length > 0) {
@@ -443,6 +461,7 @@ export default function Login() {
           if (!verifier) {
             throw new Error("RECAPTCHA_INIT_FAILED");
           }
+          await setPersistence(auth, browserLocalPersistence);
           const result = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
           setConfirmationResult(result);
           setPhoneCodeSent(true);
