@@ -7,10 +7,10 @@ import Link from "next/link";
 import PaymentSimulator from "@/components/PaymentSimulator";
 import QRGenerator from "@/components/QRGenerator";
 import { auth, db } from "@/lib/firebase";
-import { categoryNameToId, normalizeStudentName } from "@/lib/studentModel";
+import { categoryNameToId } from "@/lib/studentModel";
 import { normalizeAndValidatePhone } from "@/lib/phone";
 import { RecaptchaVerifier, signInWithEmailAndPassword, signInWithPhoneNumber, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, updateDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 export default function Login() {
   const router = useRouter();
@@ -261,44 +261,35 @@ export default function Login() {
     
     if (registerStep === 1 && studentCategory) {
       try {
-        const normalizedParentPhone = normalizeAndValidatePhone(parentPhone);
-        const studentDocRef = doc(collection(db, "students"));
-        const newStudentId = studentDocRef.id;
-        const normalizedName = normalizeStudentName(studentName);
-        const categoryId = categoryNameToId(studentCategory.name);
-
-        // Registrar deportista en la colección 'students'
-        const birthYear = new Date(birthDate).getFullYear();
-        const ageNum = 2026 - birthYear;
-        await setDoc(studentDocRef, {
-          studentId: newStudentId,
-          name: studentName,
-          normalizedName,
-          age: ageNum || 9,
-          parentName,
-          parentPhone: normalizedParentPhone,
-          parentEmail: "",
-          parentUid: "",
-          categoryId,
-          category: studentCategory.name,
-          assignedCoachUid: "",
-          assignment: "automatic",
-          status: "suspended",
-          billingStatus: "pending_payment",
-          healthStatus: "optimal",
-          dueDays: 7,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+        const response = await fetch("/api/parent/register-student", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentName,
+            parentName,
+            parentPhone,
+            birthDate,
+            categoryName: studentCategory.name
+          })
         });
-        setStudentId(newStudentId);
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "No fue posible iniciar la inscripción.");
+        }
+
+        setStudentId(data.studentId);
         setRegisteredStudentLinked(false);
-        setRegisteredStudentStatus("suspended");
+        setRegisteredStudentStatus(data.status || "suspended");
         setRegisteredStudentStatusError("");
         setRegistrationToken(`CC-2026-${Math.floor(1000 + Math.random() * 9000)}`);
         
-        localStorage.setItem("simulatedStatus", "suspended");
+        localStorage.setItem("simulatedStatus", data.status || "suspended");
         
-        setRegisterStep(2);
+        if (data.status === "active" || data.status === "pending_validation") {
+          setRegisterStep(3);
+        } else {
+          setRegisterStep(2);
+        }
       } catch (err) {
         console.error("Error en registro:", err);
         setRegisterError("Ocurrió un error al registrar al alumno: " + err.message);
@@ -327,21 +318,24 @@ export default function Login() {
         throw new Error("No se encontró el identificador del alumno registrado.");
       }
 
-      // 1. Guardar solicitud en pendingPayments en Firestore
-      await addDoc(collection(db, "payments"), {
-        studentName: studentName,
-        studentId,
-        parentUid: parentUid || "",
-        categoryId: categoryNameToId(studentCategory.name),
-        categoryName: studentCategory.name,
-        amount: amount,
-        paymentType: paymentLabel,
-        date: new Date().toLocaleDateString("es-MX") + " " + new Date().toLocaleTimeString("es-MX", { hour: '2-digit', minute: '2-digit' }),
-        status: "pending",
-        parentEmail: parentEmail.toLowerCase(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      // 1. Guardar o reutilizar solicitud de pago pendiente de inscripción
+      const paymentResponse = await fetch("/api/parent/report-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName,
+          studentId,
+          categoryId: categoryNameToId(studentCategory.name),
+          categoryName: studentCategory.name,
+          amount,
+          paymentType: paymentLabel,
+          parentEmail: parentEmail.toLowerCase()
+        })
       });
+      const paymentData = await paymentResponse.json();
+      if (!paymentResponse.ok || !paymentData.success) {
+        throw new Error(paymentData.error || "No fue posible registrar el pago.");
+      }
 
       // 2. Cambiar su estado a 'pending_validation' tanto en Firestore como en localStorage.
       const studentRef = doc(db, "students", studentId || studentName);

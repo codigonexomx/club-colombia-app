@@ -1,6 +1,7 @@
 // src/services/firebase/payments.js
 
 import { db } from "@/lib/firebase";
+import { filterFinancialPayments } from "@/lib/paymentsModel";
 import { collection, query, where, getDocs, addDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 /**
@@ -14,7 +15,7 @@ export async function getPaymentsHistory(studentId) {
   querySnapshot.forEach((doc) => {
     payments.push({ id: doc.id, ...doc.data() });
   });
-  return payments;
+  return filterFinancialPayments(payments);
 }
 
 /**
@@ -37,7 +38,7 @@ export function subscribePayments(studentId, parentUid, parentEmail, callback) {
     snapshot.forEach((doc) => {
       list.push({ id: doc.id, ...doc.data() });
     });
-    callback(list);
+    callback(filterFinancialPayments(list));
   });
 }
 

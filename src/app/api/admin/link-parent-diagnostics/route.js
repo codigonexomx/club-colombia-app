@@ -49,7 +49,9 @@ function compactPayment(docSnap) {
     studentName: data.studentName || "",
     parentUid: data.parentUid || "",
     parentEmail: data.parentEmail || "",
-    status: data.status || ""
+    status: data.status || "",
+    isTest: data.isTest === true,
+    excludedFromFinancialHistory: data.excludedFromFinancialHistory === true
   };
 }
 

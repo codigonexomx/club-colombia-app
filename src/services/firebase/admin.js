@@ -3,6 +3,7 @@
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, onSnapshot, query, where, serverTimestamp } from "firebase/firestore";
 import { adminListenerStarted, adminListenerStopped, adminStep } from "@/lib/adminDiagnostics";
+import { isFinancialPayment } from "@/lib/paymentsModel";
 
 /**
  * Obtiene todos los estudiantes de la base de datos real.
@@ -116,6 +117,12 @@ async function countQuery(collectionName, field, value) {
   return snap.size;
 }
 
+async function countFinancialPaymentsForStudent(studentId) {
+  const q = query(collection(db, "payments"), where("studentId", "==", studentId));
+  const snap = await getDocs(q);
+  return snap.docs.filter((docSnapshot) => isFinancialPayment(docSnapshot.data())).length;
+}
+
 function attendanceRecordMatchesStudent(record, studentId, studentName) {
   if (record?.studentId) return record.studentId === studentId;
   return !!studentName && (record?.studentName === studentName || record?.name === studentName);
@@ -150,7 +157,7 @@ export async function getStudentLifecycleHistory(student) {
   const studentName = student?.name || "";
   if (!studentId) return { payments: 0, attendance: 0, evaluations: 0, total: 0 };
 
-  const payments = await countQuery("payments", "studentId", studentId);
+  const payments = await countFinancialPaymentsForStudent(studentId);
   const attendance = await countAttendanceForStudent(studentId, studentName);
   const evaluationsById = await countQuery("evaluations", "studentId", studentId);
   const evaluationsByName = studentName ? await countQuery("evaluations", "studentName", studentName) : 0;

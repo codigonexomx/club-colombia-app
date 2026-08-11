@@ -16,6 +16,7 @@ import LevelBadge from "@/components/LevelBadge";
 import { LEVEL_OPTIONS, getLevelLabel, parseLegacyCategoryAndLevel, resolveStudentCategoryAndLevel } from "@/lib/levelModel";
 import { WEEKDAY_OPTIONS, getWeekdayLabel } from "@/lib/trainingScheduleModel";
 import { buildStudentAttendanceMetrics } from "@/lib/attendanceModel";
+import { isTestPayment } from "@/lib/paymentsModel";
 import { calculateLeaderboard, categoryNameToId, normalizeStudentName } from "@/lib/studentModel";
 import { normalizeAndValidatePhone } from "@/lib/phone";
 
@@ -1927,7 +1928,16 @@ export default function AdminDashboard() {
                         <tr key={payment.id} className="text-xs">
                           <td className="py-3 font-bold text-slate-200">{payment.studentName || "Sin nombre"}</td>
                           <td className="py-3 text-slate-400">{payment.categoryName || "Sin categoría"}</td>
-                          <td className="py-3 text-red-400 font-bold">{formatCurrency(payment.amount)}</td>
+                          <td className="py-3 text-red-400 font-bold">
+                            <div className="flex items-center gap-2">
+                              <span>{formatCurrency(payment.amount)}</span>
+                              {isTestPayment(payment) && (
+                                <span className="px-2 py-0.5 rounded-lg bg-slate-700 text-slate-300 text-[8px] font-black uppercase">
+                                  PRUEBA
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-3 text-slate-400">{payment.paymentType || "Mensualidad"}</td>
                           <td className="py-3 text-slate-500 font-mono text-[10px]">{payment.date || "Sin fecha"}</td>
                           <td className="py-3">
