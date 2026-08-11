@@ -5,16 +5,16 @@ import * as DemoCalendar from "@/demo/calendar";
 import * as FirebaseCalendar from "./firebase/calendar";
 
 export const CalendarService = {
-  getCalendarEvents: () => {
-    return isDemoActive() 
-      ? DemoCalendar.getCalendarEvents() 
-      : FirebaseCalendar.getCalendarEvents();
+  getCalendarEvents: (categoryName, options) => {
+    return isDemoActive()
+      ? DemoCalendar.getCalendarEvents(categoryName, options)
+      : FirebaseCalendar.getCalendarEvents(categoryName, options);
   },
 
-  subscribeCalendarEvents: (categoryName, callback) => {
+  subscribeCalendarEvents: (categoryName, callback, options) => {
     return isDemoActive()
-      ? DemoCalendar.subscribeCalendarEvents(categoryName, callback)
-      : FirebaseCalendar.subscribeCalendarEvents(categoryName, callback);
+      ? DemoCalendar.subscribeCalendarEvents(categoryName, callback, options)
+      : FirebaseCalendar.subscribeCalendarEvents(categoryName, callback, options);
   },
 
   updateRSVP: (eventId, studentName, response) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, LogOut, ChartBar, CreditCard, Image as ImageIcon, Sparkles, Trophy, Calendar, CheckCircle2, Clock, AlertTriangle, Play, Pause, Activity, X, Users } from "lucide-react";
@@ -17,6 +17,13 @@ import { getWeekdayLabel, trainingScheduleMatchesStudent } from "@/lib/trainingS
 import { auth } from "@/lib/firebase";
 
 const EMPTY_ARRAY = [];
+const EVENT_TYPE_LABELS = {
+  match: "Partido",
+  training: "Entrenamiento",
+  practice: "Entrenamiento",
+  meeting: "Reunión",
+  other: "Evento"
+};
 
 const parseVideoUrl = (url) => {
   if (!url) return { type: "unknown", embedUrl: "" };
@@ -43,9 +50,25 @@ const parseVideoUrl = (url) => {
   };
 };
 
+const getEventTypeLabel = (type) => EVENT_TYPE_LABELS[type] || "Evento";
+
+const getTodayKey = () => new Date().toISOString().slice(0, 10);
+
+const isUpcomingEvent = (event, todayKey) => !event.date || event.date >= todayKey;
+
+const compareEventsAsc = (a, b) => {
+  const dateA = a.date || "";
+  const dateB = b.date || "";
+  const timeA = a.time || "";
+  const timeB = b.time || "";
+  return dateA.localeCompare(dateB) || timeA.localeCompare(timeB);
+};
+
+const compareEventsDesc = (a, b) => compareEventsAsc(b, a);
+
 export default function ParentDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("performance"); // 'performance' | 'billing' | 'gallery'
+  const [activeTab, setActiveTab] = useState("performance"); // 'performance' | 'events' | 'billing' | 'gallery'
   const [activeSubTab, setActiveSubTab] = useState("stats"); // 'stats' | 'calendar' | 'drills'
   const [userEmail, setUserEmail] = useState("");
   const [parentUid, setParentUid] = useState("");
@@ -106,7 +129,12 @@ export default function ParentDashboard() {
   
   const { data: attendanceData } = useAttendance(resolvedStudentId, resolvedStudentName);
   const { data: paymentsData, reportPayment } = usePayments(resolvedStudentId, parentUid, userEmail);
-  const { data: calendarData, updateRSVP } = useCalendar(resolvedCategoryName);
+  const {
+    data: calendarData,
+    loading: eventsLoading,
+    error: eventsError,
+    updateRSVP
+  } = useCalendar(resolvedCategoryName);
   const { schedules: allTrainingSchedules } = useTrainingSchedules({ includeCoaches: false });
 
   // DECLARACIÓN DE CONSTANTES DERIVADAS DE LOS HOOKS (REEMPLAZANDO LOS USESTATE Y USEEFFECTS)
@@ -124,8 +152,18 @@ export default function ParentDashboard() {
   const coachNotes = attendanceData?.coachNotes || "";
   const drills = attendanceData?.drills || [];
   const myPayments = paymentsData || [];
-  const events = calendarData || [];
+  const events = calendarData || EMPTY_ARRAY;
   const weeklySchedules = (allTrainingSchedules || []).filter((schedule) => trainingScheduleMatchesStudent(schedule, studentData));
+  const todayKey = useMemo(() => getTodayKey(), []);
+  const publishedEvents = useMemo(() => (
+    events.filter((event) => event.published !== false)
+  ), [events]);
+  const upcomingEvents = useMemo(() => (
+    publishedEvents.filter((event) => isUpcomingEvent(event, todayKey)).sort(compareEventsAsc)
+  ), [publishedEvents, todayKey]);
+  const pastEvents = useMemo(() => (
+    publishedEvents.filter((event) => !isUpcomingEvent(event, todayKey)).sort(compareEventsDesc)
+  ), [publishedEvents, todayKey]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -245,6 +283,86 @@ export default function ParentDashboard() {
     } catch (err) {
       console.error("Error al reportar pago:", err);
     }
+  };
+
+  const renderClubEventCard = (event) => {
+    const userResponse = event.rsvps?.[studentName] || null;
+    const eventIsUpcoming = isUpcomingEvent(event, todayKey);
+    const eventTypeLabel = getEventTypeLabel(event.type);
+
+    return (
+      <div key={event.id} className="bg-[#07090e]/60 border border-slate-800/80 p-4 rounded-2xl space-y-3">
+        <div className="flex justify-between items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                event.type === "match" ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-[#10b981]"
+              }`}>
+                {eventTypeLabel}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                eventIsUpcoming ? "bg-sky-500/10 text-sky-300" : "bg-slate-800 text-slate-400"
+              }`}>
+                {eventIsUpcoming ? "Próximo" : "Finalizado"}
+              </span>
+              <span className="text-[9px] text-slate-500 font-mono">{event.date || "Sin fecha"} • {event.time || "Sin hora"}</span>
+            </div>
+            <h4 className="font-bold text-slate-200 text-xs mt-1.5 truncate">{event.title || "Evento del club"}</h4>
+            <p className="text-[10px] text-slate-450 mt-1 leading-normal">{event.description || "Sin descripción"}</p>
+            <div className="text-[9px] text-slate-500 font-mono mt-1">{event.location || "Sin sede"}</div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-slate-900/60 pt-2.5">
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                await handleRSVP(event.id, "confirmed");
+                setRsvpFeedback(prev => ({ ...prev, [event.id]: "confirmed" }));
+                setTimeout(() => {
+                  setRsvpFeedback(prev => ({ ...prev, [event.id]: null }));
+                }, 2500);
+              }}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-bold font-display transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                userResponse === "confirmed"
+                  ? "bg-[#10b981] text-slate-950 font-black shadow-[0_0_12px_rgba(16,185,129,0.25)]"
+                  : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Asistiré
+            </button>
+            <button
+              onClick={async () => {
+                await handleRSVP(event.id, "declined");
+                setRsvpFeedback(prev => ({ ...prev, [event.id]: "declined" }));
+                setTimeout(() => {
+                  setRsvpFeedback(prev => ({ ...prev, [event.id]: null }));
+                }, 2500);
+              }}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-bold font-display transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                userResponse === "declined"
+                  ? "bg-red-500 text-slate-950 font-black shadow-[0_0_12px_rgba(239,68,68,0.25)]"
+                  : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <X className="w-3.5 h-3.5" />
+              No asistiré
+            </button>
+          </div>
+
+          {rsvpFeedback[event.id] && (
+            <div className={`text-[9px] font-bold text-center py-1 rounded-lg animate-fade-in ${
+              rsvpFeedback[event.id] === "confirmed"
+                ? "text-[#10b981] bg-emerald-500/10 border border-emerald-500/20"
+                : "text-red-400 bg-red-500/10 border border-red-500/20"
+            }`}>
+              {rsvpFeedback[event.id] === "confirmed" ? "Asistencia confirmada con éxito" : "Inasistencia registrada"}
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -418,18 +536,27 @@ export default function ParentDashboard() {
 
           {/* Menú de pestañas para móviles */}
           {!isPendingAssignment && (
-            <div className="bg-[#0e121e] border border-slate-900 rounded-2xl p-2 w-full grid grid-cols-3 gap-1">
-              <button
-                onClick={() => setActiveTab("performance")}
+	            <div className="bg-[#0e121e] border border-slate-900 rounded-2xl p-2 w-full grid grid-cols-4 gap-1">
+	              <button
+	                onClick={() => setActiveTab("performance")}
                 className={`py-2 rounded-xl text-[10px] font-bold font-display transition-all flex flex-col items-center gap-1 cursor-pointer ${
                   activeTab === "performance" ? "bg-slate-800 text-[#10b981] border border-slate-700/50" : "text-slate-400"
                 }`}
               >
-                <ChartBar className="w-3.5 h-3.5" />
-                Rendimiento
-              </button>
-              <button
-                onClick={() => setActiveTab("billing")}
+	                <ChartBar className="w-3.5 h-3.5" />
+	                Rendimiento
+	              </button>
+	              <button
+	                onClick={() => setActiveTab("events")}
+	                className={`py-2 rounded-xl text-[10px] font-bold font-display transition-all flex flex-col items-center gap-1 cursor-pointer ${
+	                  activeTab === "events" ? "bg-slate-800 text-[#10b981] border border-slate-700/50" : "text-slate-400"
+	                }`}
+	              >
+	                <Calendar className="w-3.5 h-3.5" />
+	                Eventos
+	              </button>
+	              <button
+	                onClick={() => setActiveTab("billing")}
                 className={`py-2 rounded-xl text-[10px] font-bold font-display transition-all flex flex-col items-center gap-1 cursor-pointer ${
                   activeTab === "billing" ? "bg-slate-800 text-sky-400 border border-slate-700/50" : "text-slate-400"
                 }`}
@@ -694,82 +821,11 @@ export default function ParentDashboard() {
                               </div>
                             </div>
                           ))}
-                          {events.map((event) => {
-                            const userResponse = event.rsvps?.[studentName] || null;
-                            return (
-                              <div key={event.id} className="bg-[#07090e]/60 border border-slate-800/80 p-4 rounded-2xl space-y-3">
-                                <div className="flex justify-between items-start gap-4">
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                                        event.type === "match" ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-[#10b981]"
-                                      }`}>
-                                        {event.type === "match" ? "Partido" : "Entrenamiento"}
-                                      </span>
-                                      <span className="text-[9px] text-slate-500 font-mono">{event.date} • {event.time}</span>
-                                    </div>
-                                    <h4 className="font-bold text-slate-200 text-xs mt-1.5 truncate">{event.title}</h4>
-                                    <p className="text-[10px] text-slate-450 mt-1 leading-normal">{event.description}</p>
-                                    <div className="text-[9px] text-slate-500 font-mono mt-1">📍 {event.location}</div>
-                                  </div>
-                                </div>
-
-                                {/* RSVP Buttons & Feedback */}
-                                <div className="flex flex-col gap-2 border-t border-slate-900/60 pt-2.5">
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={async () => {
-                                        await handleRSVP(event.id, "confirmed");
-                                        setRsvpFeedback(prev => ({ ...prev, [event.id]: "confirmed" }));
-                                        setTimeout(() => {
-                                          setRsvpFeedback(prev => ({ ...prev, [event.id]: null }));
-                                        }, 2500);
-                                      }}
-                                      className={`flex-1 py-2 rounded-xl text-[10px] font-bold font-display transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                        userResponse === "confirmed"
-                                          ? "bg-[#10b981] text-slate-950 font-black shadow-[0_0_12px_rgba(16,185,129,0.25)]"
-                                          : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
-                                      }`}
-                                    >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      Asistiré
-                                    </button>
-                                    <button
-                                      onClick={async () => {
-                                        await handleRSVP(event.id, "declined");
-                                        setRsvpFeedback(prev => ({ ...prev, [event.id]: "declined" }));
-                                        setTimeout(() => {
-                                          setRsvpFeedback(prev => ({ ...prev, [event.id]: null }));
-                                        }, 2500);
-                                      }}
-                                      className={`flex-1 py-2 rounded-xl text-[10px] font-bold font-display transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                        userResponse === "declined"
-                                          ? "bg-red-500 text-slate-950 font-black shadow-[0_0_12px_rgba(239,68,68,0.25)]"
-                                          : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
-                                      }`}
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                      No asistiré
-                                    </button>
-                                  </div>
-                                  
-                                  {rsvpFeedback[event.id] && (
-                                    <div className={`text-[9px] font-bold text-center py-1 rounded-lg animate-fade-in ${
-                                      rsvpFeedback[event.id] === "confirmed"
-                                        ? "text-[#10b981] bg-emerald-500/10 border border-emerald-500/20"
-                                        : "text-red-400 bg-red-500/10 border border-red-500/20"
-                                    }`}>
-                                      {rsvpFeedback[event.id] === "confirmed" ? "✓ Asistencia confirmada con éxito" : "✗ Inasistencia registrada"}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
+	                          {events.map((event) => renderClubEventCard(event))}
+	                        </div>
+	                      )}
+	                    </div>
+	                  )}
 
                   {/* Sub-tab 3: drills (Biblioteca con reproductor en cámara lenta) */}
                   {activeSubTab === "drills" && (
@@ -853,12 +909,62 @@ export default function ParentDashboard() {
                       )}
                     </div>
                   )}
-                </div>
-              )}
+	                </div>
+	              )}
+
+	              {/* TAB 2: EVENTOS DEL CLUB */}
+	              {activeTab === "events" && (
+	                <div className="bg-[#0e121e] border border-slate-900 rounded-3xl p-5 space-y-5">
+	                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+	                    <div>
+	                      <h2 className="font-display font-black text-sm uppercase tracking-wider text-slate-200">Eventos del Club</h2>
+	                      <p className="text-[10px] text-slate-500 mt-0.5">Actividades, partidos y reuniones publicadas para tu categoría.</p>
+	                    </div>
+	                    <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-[9px] font-bold text-[#10b981]">
+	                      <Calendar className="w-3 h-3" />
+	                      {categoryName || "Todas"}
+	                    </div>
+	                  </div>
+
+	                  {eventsLoading ? (
+	                    <div className="bg-[#07090e]/40 border border-slate-850 p-6 rounded-2xl text-center text-xs text-slate-500 font-sans">
+	                      Cargando eventos del club...
+	                    </div>
+	                  ) : eventsError ? (
+	                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl text-xs font-sans">
+	                      No fue posible cargar los eventos del club.
+	                    </div>
+	                  ) : upcomingEvents.length === 0 && pastEvents.length === 0 ? (
+	                    <div className="bg-[#07090e]/40 border border-slate-850 p-6 rounded-2xl text-center text-xs text-slate-500 font-sans">
+	                      No hay eventos próximos por el momento.
+	                    </div>
+	                  ) : (
+	                    <div className="space-y-5">
+	                      {upcomingEvents.length > 0 && (
+	                        <section className="space-y-3">
+	                          <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-350">Próximos</h3>
+	                          <div className="space-y-3">
+	                            {upcomingEvents.map((event) => renderClubEventCard(event))}
+	                          </div>
+	                        </section>
+	                      )}
+
+	                      {pastEvents.length > 0 && (
+	                        <section className="space-y-3">
+	                          <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-350">Finalizados</h3>
+	                          <div className="space-y-3">
+	                            {pastEvents.map((event) => renderClubEventCard(event))}
+	                          </div>
+	                        </section>
+	                      )}
+	                    </div>
+	                  )}
+	                </div>
+	              )}
 
 
-              {/* TAB 2: ESTADO DE CUENTA & PAGOS */}
-              {activeTab === "billing" && (
+	              {/* TAB 3: ESTADO DE CUENTA & PAGOS */}
+	              {activeTab === "billing" && (
                 <div className="bg-[#0e121e] border border-slate-900 rounded-3xl p-5 space-y-4 font-sans">
                   <div>
                     <h2 className="font-display font-black text-sm uppercase tracking-wider text-slate-200">Estado de Facturación</h2>
@@ -898,7 +1004,7 @@ export default function ParentDashboard() {
                 </div>
               )}
 
-              {/* TAB 3: GALERÍA DE FOTOS */}
+	              {/* TAB 4: GALERÍA DE FOTOS */}
               {activeTab === "gallery" && (
                 <div className="bg-[#0e121e] border border-slate-900 rounded-3xl p-5 space-y-4">
                   <div>

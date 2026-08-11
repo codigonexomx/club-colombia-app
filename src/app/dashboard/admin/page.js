@@ -89,6 +89,7 @@ export default function AdminDashboard() {
   const [eventLocation, setEventLocation] = useState("");
   const [eventCategory, setEventCategory] = useState("Todas");
   const [eventDescription, setEventDescription] = useState("");
+  const [eventPublished, setEventPublished] = useState(true);
   const [editingEventId, setEditingEventId] = useState(null);
   const [drillSearch, setDrillSearch] = useState("");
   const [drillCategoryFilter, setDrillCategoryFilter] = useState("all");
@@ -998,6 +999,7 @@ export default function AdminDashboard() {
     setEventLocation("");
     setEventCategory("Todas");
     setEventDescription("");
+    setEventPublished(true);
     setEditingEventId(null);
   };
 
@@ -1013,7 +1015,8 @@ export default function AdminDashboard() {
         time: eventTime,
         location: eventLocation.trim(),
         category: eventCategory,
-        description: eventDescription.trim()
+        description: eventDescription.trim(),
+        published: eventPublished
       }, editingEventId);
       resetEventForm();
     } catch (err) {
@@ -1030,6 +1033,7 @@ export default function AdminDashboard() {
     setEventLocation(event.location || "");
     setEventCategory(event.category || "Todas");
     setEventDescription(event.description || "");
+    setEventPublished(event.published !== false);
     clearEventMessages();
   };
 
@@ -2346,14 +2350,25 @@ export default function AdminDashboard() {
                       placeholder="Lugar"
                       className="md:col-span-2 bg-[#07090e] border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-[#10b981]"
                     />
-                    <textarea
-                      value={eventDescription}
-                      onChange={(event) => setEventDescription(event.target.value)}
-                      placeholder="Descripción"
-                      rows={3}
-                      className="md:col-span-4 bg-[#07090e] border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-[#10b981] resize-none"
-                    />
-                  </div>
+	                    <textarea
+	                      value={eventDescription}
+	                      onChange={(event) => setEventDescription(event.target.value)}
+	                      placeholder="Descripción"
+	                      rows={3}
+	                      className="md:col-span-4 bg-[#07090e] border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-[#10b981] resize-none"
+	                    />
+	                    <label className="md:col-span-4 flex items-center justify-between gap-3 bg-[#07090e] border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300">
+	                      <span className="font-bold uppercase tracking-wider text-[10px]">
+	                        Publicado
+	                      </span>
+	                      <input
+	                        type="checkbox"
+	                        checked={eventPublished}
+	                        onChange={(event) => setEventPublished(event.target.checked)}
+	                        className="h-4 w-4 accent-[#10b981]"
+	                      />
+	                    </label>
+	                  </div>
                   <button
                     type="submit"
                     disabled={eventsActionLoading}
@@ -2422,10 +2437,17 @@ export default function AdminDashboard() {
                           <p className="text-sm font-black text-slate-100">{event.title || "Evento sin título"}</p>
                           <p className="text-[10px] text-slate-500 mt-1">{event.description || "Sin descripción"}</p>
                         </div>
-                        <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-[9px] font-black uppercase shrink-0">
-                          {event.type || "training"}
-                        </span>
-                      </div>
+	                        <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-[9px] font-black uppercase shrink-0">
+	                          {event.type || "training"}
+	                        </span>
+	                        <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase shrink-0 ${
+	                          event.published === false
+	                            ? "bg-amber-500/10 text-amber-300"
+	                            : "bg-emerald-500/10 text-emerald-300"
+	                        }`}>
+	                          {event.published === false ? "No publicado" : "Publicado"}
+	                        </span>
+	                      </div>
                       <div className="grid grid-cols-2 gap-3 mt-4 text-[10px]">
                         <div>
                           <p className="text-slate-600 uppercase font-bold tracking-wider">Fecha</p>
@@ -2477,20 +2499,21 @@ export default function AdminDashboard() {
                         <th className="pb-3">Evento</th>
                         <th className="pb-3">Tipo</th>
                         <th className="pb-3">Categoría</th>
-                        <th className="pb-3">Lugar</th>
-                        <th className="pb-3 text-right">Acciones</th>
+	                        <th className="pb-3">Lugar</th>
+	                        <th className="pb-3">Estado</th>
+	                        <th className="pb-3 text-right">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/40">
                       {eventsLoading ? (
                         <tr>
-                          <td colSpan={7} className="py-6 text-center text-xs text-slate-500">
+	                          <td colSpan={8} className="py-6 text-center text-xs text-slate-500">
                             Cargando calendario...
                           </td>
                         </tr>
                       ) : filteredEvents.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-6 text-center text-xs text-slate-500">
+	                          <td colSpan={8} className="py-6 text-center text-xs text-slate-500">
                             No hay eventos para mostrar.
                           </td>
                         </tr>
@@ -2499,10 +2522,19 @@ export default function AdminDashboard() {
                           <td className="py-3 text-slate-500 font-mono text-[10px]">{event.date || "Sin fecha"}</td>
                           <td className="py-3 text-slate-500 font-mono text-[10px]">{event.time || "Sin hora"}</td>
                           <td className="py-3 font-bold text-slate-200">{event.title || "Evento sin título"}</td>
-                          <td className="py-3 text-slate-400">{event.type || "training"}</td>
-                          <td className="py-3 text-slate-400">{event.category || "Todas"}</td>
-                          <td className="py-3 text-slate-400">{event.location || "Sin sede"}</td>
-                          <td className="py-3">
+	                          <td className="py-3 text-slate-400">{event.type || "training"}</td>
+	                          <td className="py-3 text-slate-400">{event.category || "Todas"}</td>
+	                          <td className="py-3 text-slate-400">{event.location || "Sin sede"}</td>
+	                          <td className="py-3">
+	                            <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${
+	                              event.published === false
+	                                ? "bg-amber-500/10 text-amber-300"
+	                                : "bg-emerald-500/10 text-emerald-300"
+	                            }`}>
+	                              {event.published === false ? "No publicado" : "Publicado"}
+	                            </span>
+	                          </td>
+	                          <td className="py-3">
                             <div className="flex justify-end gap-2">
                               <button
                                 type="button"

@@ -17,6 +17,7 @@ export function useAdminEvents() {
   const [successMessage, setSuccessMessage] = useState("");
 
   adminStep("ADMIN_STEP_59_USE_ADMIN_EVENTS_BEFORE_EFFECT");
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     adminStep("ADMIN_STEP_60_USE_ADMIN_EVENTS_EFFECT_ENTER");
     setLoading(true);
@@ -25,13 +26,23 @@ export function useAdminEvents() {
     try {
       // Reutilizamos el listener de CalendarService que ya lee la colección "events" entera.
       adminStep("ADMIN_STEP_61_USE_ADMIN_EVENTS_BEFORE_LISTENER");
-      const unsubscribe = CalendarService.subscribeCalendarEvents("all", (list) => {
-        adminStep("ADMIN_STEP_62_USE_ADMIN_EVENTS_DATA_RECEIVED", {
-          eventsCount: Array.isArray(list) ? list.length : "not-array"
-        });
-        setEvents(Array.isArray(list) ? list : []);
-        setLoading(false);
-      });
+      const unsubscribe = CalendarService.subscribeCalendarEvents(
+        "all",
+        (list) => {
+          adminStep("ADMIN_STEP_62_USE_ADMIN_EVENTS_DATA_RECEIVED", {
+            eventsCount: Array.isArray(list) ? list.length : "not-array"
+          });
+          setEvents(Array.isArray(list) ? list : []);
+          setLoading(false);
+        },
+        {
+          includeUnpublished: true,
+          onError: (err) => {
+            setError(err.message || "Error al cargar eventos");
+            setLoading(false);
+          }
+        }
+      );
 
       return () => {
         adminStep("ADMIN_STEP_63_USE_ADMIN_EVENTS_CLEANUP");
@@ -43,6 +54,7 @@ export function useAdminEvents() {
       return () => {};
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const clearMessages = useCallback(() => {
     setError(null);

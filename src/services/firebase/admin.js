@@ -202,19 +202,31 @@ export async function saveEvent(eventData, eventId = null) {
     throw new Error("Datos de evento incompletos");
   }
   const finalId = eventId || eventData.title.toLowerCase().replace(/[^a-z0-9]/g, "-");
-  
+  const eventPayload = {
+    title: eventData.title,
+    type: eventData.type || "training",
+    date: eventData.date,
+    time: eventData.time,
+    location: eventData.location || "Club Colombia Cancha Principal",
+    category: eventData.category,
+    description: eventData.description || "",
+    published: eventData.published !== false,
+    updatedAt: serverTimestamp()
+  };
+
+  if (!eventId) {
+    eventPayload.createdAt = serverTimestamp();
+  }
+
+  if (eventData.rsvps) {
+    eventPayload.rsvps = eventData.rsvps;
+  } else if (!eventId) {
+    eventPayload.rsvps = {};
+  }
+
   const docRef = doc(db, "events", finalId);
   await import("firebase/firestore").then(({ setDoc }) => 
-    setDoc(docRef, {
-      title: eventData.title,
-      type: eventData.type || "training",
-      date: eventData.date,
-      time: eventData.time,
-      location: eventData.location || "Club Colombia Cancha Principal",
-      category: eventData.category,
-      description: eventData.description || "",
-      rsvps: eventData.rsvps || {}
-    }, { merge: true })
+    setDoc(docRef, eventPayload, { merge: true })
   );
   return { success: true, eventId: finalId };
 }

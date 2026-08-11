@@ -14,28 +14,39 @@ export function useCalendar(categoryName) {
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await CalendarService.getCalendarEvents();
+      const list = await CalendarService.getCalendarEvents(categoryName || "all");
       setData(list);
     } catch (err) {
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [categoryName]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setLoading(true);
     setError(null);
 
-    const unsubscribe = CalendarService.subscribeCalendarEvents(categoryName || "all", (list) => {
-      setData(list);
-      setLoading(false);
-    });
+    const unsubscribe = CalendarService.subscribeCalendarEvents(
+      categoryName || "all",
+      (list) => {
+        setData(list);
+        setLoading(false);
+      },
+      {
+        onError: (err) => {
+          setError(err);
+          setLoading(false);
+        }
+      }
+    );
 
     return () => {
       unsubscribe();
     };
   }, [categoryName]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const updateRSVP = useCallback(async (eventId, studentName, response) => {
     setError(null);
