@@ -14,6 +14,7 @@ import { useTrainingSchedules } from "@/hooks/useTrainingSchedules";
 import LevelBadge from "@/components/LevelBadge";
 import { calculateAttendanceSummary, getAttendanceStatusLabel, sortAttendanceNewestFirst } from "@/lib/attendanceModel";
 import { getWeekdayLabel, trainingScheduleMatchesStudent } from "@/lib/trainingScheduleModel";
+import { isEventPublished } from "@/lib/eventModel";
 import { auth } from "@/lib/firebase";
 
 const EMPTY_ARRAY = [];
@@ -134,7 +135,10 @@ export default function ParentDashboard() {
     loading: eventsLoading,
     error: eventsError,
     updateRSVP
-  } = useCalendar(resolvedCategoryName);
+  } = useCalendar(resolvedCategoryName, {
+    enabled: Boolean(resolvedStudentId),
+    studentId: resolvedStudentId
+  });
   const { schedules: allTrainingSchedules } = useTrainingSchedules({ includeCoaches: false });
 
   // DECLARACIÓN DE CONSTANTES DERIVADAS DE LOS HOOKS (REEMPLAZANDO LOS USESTATE Y USEEFFECTS)
@@ -156,7 +160,7 @@ export default function ParentDashboard() {
   const weeklySchedules = (allTrainingSchedules || []).filter((schedule) => trainingScheduleMatchesStudent(schedule, studentData));
   const todayKey = useMemo(() => getTodayKey(), []);
   const publishedEvents = useMemo(() => (
-    events.filter((event) => event.published !== false)
+    events.filter(isEventPublished)
   ), [events]);
   const upcomingEvents = useMemo(() => (
     publishedEvents.filter((event) => isUpcomingEvent(event, todayKey)).sort(compareEventsAsc)
@@ -252,7 +256,7 @@ export default function ParentDashboard() {
   // Manejar respuesta de RSVP
   const handleRSVP = async (eventId, response) => {
     try {
-      await updateRSVP(eventId, studentName, response);
+      await updateRSVP(eventId, studentName, response, studentId);
       if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
         window.navigator.vibrate(50); // Vibración física ligera de confirmación
       }

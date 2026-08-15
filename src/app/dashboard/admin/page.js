@@ -19,6 +19,7 @@ import { buildStudentAttendanceMetrics } from "@/lib/attendanceModel";
 import { isTestPayment } from "@/lib/paymentsModel";
 import { calculateLeaderboard, categoryNameToId, normalizeStudentName } from "@/lib/studentModel";
 import { normalizeAndValidatePhone } from "@/lib/phone";
+import { isEventPublished } from "@/lib/eventModel";
 
 const baseCategoryOptions = [
   "Sub-6", "Sub-7", "Sub-8", "Sub-9", "Sub-10", "Sub-11", "Sub-12", "Sub-13", "Sub-14",
@@ -2441,11 +2442,11 @@ export default function AdminDashboard() {
 	                          {event.type || "training"}
 	                        </span>
 	                        <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase shrink-0 ${
-	                          event.published === false
+                          !isEventPublished(event)
 	                            ? "bg-amber-500/10 text-amber-300"
 	                            : "bg-emerald-500/10 text-emerald-300"
 	                        }`}>
-	                          {event.published === false ? "No publicado" : "Publicado"}
+                          {isEventPublished(event) ? "Publicado" : "No publicado"}
 	                        </span>
 	                      </div>
                       <div className="grid grid-cols-2 gap-3 mt-4 text-[10px]">
@@ -2527,11 +2528,11 @@ export default function AdminDashboard() {
 	                          <td className="py-3 text-slate-400">{event.location || "Sin sede"}</td>
 	                          <td className="py-3">
 	                            <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${
-	                              event.published === false
+	                              !isEventPublished(event)
 	                                ? "bg-amber-500/10 text-amber-300"
 	                                : "bg-emerald-500/10 text-emerald-300"
 	                            }`}>
-	                              {event.published === false ? "No publicado" : "Publicado"}
+	                              {isEventPublished(event) ? "Publicado" : "No publicado"}
 	                            </span>
 	                          </td>
 	                          <td className="py-3">

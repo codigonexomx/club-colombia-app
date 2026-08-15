@@ -17,10 +17,10 @@ export const CalendarService = {
       : FirebaseCalendar.subscribeCalendarEvents(categoryName, callback, options);
   },
 
-  updateRSVP: (eventId, studentName, response) => {
+  updateRSVP: (eventId, studentName, response, studentId) => {
     return isDemoActive()
-      ? DemoCalendar.updateRSVP(eventId, studentName, response)
-      : FirebaseCalendar.updateRSVP(eventId, studentName, response);
+      ? DemoCalendar.updateRSVP(eventId, studentName, response, studentId)
+      : FirebaseCalendar.updateRSVP(eventId, studentName, response, studentId);
   }
 };
 export default CalendarService;

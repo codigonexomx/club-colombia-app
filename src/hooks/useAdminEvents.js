@@ -61,12 +61,22 @@ export function useAdminEvents() {
     setSuccessMessage("");
   }, []);
 
+  const refreshEvents = useCallback(async () => {
+    const list = await CalendarService.getCalendarEvents("all", { includeUnpublished: true });
+    setEvents(Array.isArray(list) ? list : []);
+  }, []);
+
   const saveEvent = useCallback(async (eventData, eventId = null) => {
     setActionLoading(true);
     clearMessages();
 
     try {
       const result = await AdminService.saveEvent(eventData, eventId);
+      try {
+        await refreshEvents();
+      } catch (refreshError) {
+        console.error("El evento se guardó, pero no se pudo refrescar la lista:", refreshError);
+      }
       setSuccessMessage(eventId ? "Evento actualizado correctamente." : "Evento creado correctamente.");
       return result;
     } catch (err) {
@@ -76,7 +86,7 @@ export function useAdminEvents() {
     } finally {
       setActionLoading(false);
     }
-  }, [clearMessages]);
+  }, [clearMessages, refreshEvents]);
 
   const deleteEvent = useCallback(async (eventId) => {
     setActionLoading(true);
@@ -84,6 +94,11 @@ export function useAdminEvents() {
 
     try {
       const result = await AdminService.deleteEvent(eventId);
+      try {
+        await refreshEvents();
+      } catch (refreshError) {
+        console.error("El evento se eliminó, pero no se pudo refrescar la lista:", refreshError);
+      }
       setSuccessMessage("Evento eliminado correctamente.");
       return result;
     } catch (err) {
@@ -93,7 +108,7 @@ export function useAdminEvents() {
     } finally {
       setActionLoading(false);
     }
-  }, [clearMessages]);
+  }, [clearMessages, refreshEvents]);
 
   return {
     events,

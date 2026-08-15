@@ -1,91 +1,97 @@
-// src/services/firebase/calendar.js
+// Acceso protegido al módulo de eventos real.
 
-import { db } from "@/lib/firebase";
-import { collection, getDocs, onSnapshot, query, where, doc, updateDoc } from "firebase/firestore";
-import { adminListenerStarted, adminListenerStopped, adminStep } from "@/lib/adminDiagnostics";
+async function parseResponse(response) {
+  let payload = {};
 
-const GENERAL_EVENT_CATEGORY = "Todas";
+  try {
+    payload = await response.json();
+  } catch (error) {
+    payload = {};
+  }
 
-function shouldIncludeEvent(event, options = {}) {
-  return options.includeUnpublished === true || event.published !== false;
+  if (!response.ok) {
+    throw new Error(payload.error || "No fue posible completar la operación de eventos");
+  }
+
+  return payload;
 }
 
-function sortEventsByDateAndTime(events) {
-  return events.sort((a, b) => {
-    const dateA = a.date || "";
-    const dateB = b.date || "";
-    const timeA = a.time || "";
-    const timeB = b.time || "";
-    return dateA.localeCompare(dateB) || timeA.localeCompare(timeB);
+function getEventsUrl(options = {}) {
+  if (options.includeUnpublished === true) {
+    return "/api/admin/events";
+  }
+
+  const params = new URLSearchParams();
+  if (options.studentId) {
+    params.set("studentId", options.studentId);
+  }
+
+  const queryString = params.toString();
+  return queryString ? `/api/events?${queryString}` : "/api/events";
+}
+
+async function fetchEvents(options = {}) {
+  const response = await fetch(getEventsUrl(options), {
+    method: "GET",
+    cache: "no-store",
+    credentials: "same-origin"
   });
+  const payload = await parseResponse(response);
+  return Array.isArray(payload.events) ? payload.events : [];
 }
 
-/**
- * Obtiene los eventos del calendario real.
- */
 export async function getCalendarEvents(categoryName = "all", options = {}) {
-  const categories = categoryName && categoryName !== "all"
-    ? Array.from(new Set([categoryName, GENERAL_EVENT_CATEGORY]))
-    : [];
-  const ref = categories.length > 0
-    ? query(collection(db, "events"), where("category", "in", categories))
-    : collection(db, "events");
-  const querySnapshot = await getDocs(ref);
-  const events = [];
-  querySnapshot.forEach((doc) => {
-    const event = { id: doc.id, ...doc.data() };
-    if (shouldIncludeEvent(event, options)) {
-      events.push(event);
-    }
-  });
-  return sortEventsByDateAndTime(events);
+  void categoryName;
+  return fetchEvents(options);
 }
 
 /**
- * Suscribe en tiempo real a los eventos del calendario, opcionalmente filtrados por categoría.
+ * Mantiene la API del hook actual con una sincronización periódica protegida.
+ * El navegador ya no abre un listener directo sobre la colección events.
  */
 export function subscribeCalendarEvents(categoryName, callback, options = {}) {
-  const categories = categoryName && categoryName !== "all"
-    ? Array.from(new Set([categoryName, GENERAL_EVENT_CATEGORY]))
-    : [];
-  const ref = categories.length > 0
-    ? query(collection(db, "events"), where("category", "in", categories))
-    : collection(db, "events");
+  void categoryName;
+  let disposed = false;
+  const pollIntervalMs = options.pollIntervalMs || 30000;
 
-  adminListenerStarted("ADMIN_STEP_82_FIRESTORE_LISTENER_EVENTS_CREATED", { collection: "events", categoryName });
-  const unsubscribe = onSnapshot(ref, (snapshot) => {
-    const list = [];
-    snapshot.forEach((doc) => {
-      const event = { id: doc.id, ...doc.data() };
-      if (shouldIncludeEvent(event, options)) {
-        list.push(event);
+  const load = async () => {
+    try {
+      const list = await fetchEvents(options);
+      if (!disposed) callback(list);
+    } catch (error) {
+      if (!disposed && typeof options.onError === "function") {
+        options.onError(error);
       }
-    });
-    sortEventsByDateAndTime(list);
-    adminStep("ADMIN_STEP_83_FIRESTORE_LISTENER_EVENTS_SNAPSHOT", {
-      docsCount: snapshot.size,
-      mappedCount: list.length
-    });
-    callback(list);
-  }, (error) => {
-    if (typeof options.onError === "function") {
-      options.onError(error);
     }
-  });
+  };
+
+  load();
+  const intervalId = setInterval(load, pollIntervalMs);
+
   return () => {
-    adminListenerStopped("ADMIN_STEP_84_FIRESTORE_LISTENER_EVENTS_UNSUBSCRIBE", { collection: "events", categoryName });
-    unsubscribe();
+    disposed = true;
+    clearInterval(intervalId);
   };
 }
 
-/**
- * Actualiza la confirmación RSVP de un evento real.
- */
-export async function updateRSVP(eventId, studentName, response) {
-  if (!eventId || !studentName) return { success: false };
-  const docRef = doc(db, "events", eventId);
-  await updateDoc(docRef, {
-    [`rsvps.${studentName}`]: response
+export async function updateRSVP(eventId, studentName, response, studentId = "") {
+  if (!eventId || !studentId || !response) {
+    return { success: false };
+  }
+
+  const httpResponse = await fetch("/api/events/rsvp", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    credentials: "same-origin",
+    body: JSON.stringify({
+      eventId,
+      studentId,
+      studentName,
+      response
+    })
   });
-  return { success: true };
+
+  return parseResponse(httpResponse);
 }

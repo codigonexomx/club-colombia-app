@@ -198,37 +198,21 @@ export async function createEvent(eventData) {
  * Guarda o actualiza un evento en el calendario de Firebase.
  */
 export async function saveEvent(eventData, eventId = null) {
-  if (!eventData.title || !eventData.date || !eventData.time) {
-    throw new Error("Datos de evento incompletos");
-  }
-  const finalId = eventId || eventData.title.toLowerCase().replace(/[^a-z0-9]/g, "-");
-  const eventPayload = {
-    title: eventData.title,
-    type: eventData.type || "training",
-    date: eventData.date,
-    time: eventData.time,
-    location: eventData.location || "Club Colombia Cancha Principal",
-    category: eventData.category,
-    description: eventData.description || "",
-    published: eventData.published !== false,
-    updatedAt: serverTimestamp()
-  };
+  const response = await fetch("/api/admin/events", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    credentials: "same-origin",
+    body: JSON.stringify({ ...eventData, eventId: eventId || "" })
+  });
+  const payload = await response.json().catch(() => ({}));
 
-  if (!eventId) {
-    eventPayload.createdAt = serverTimestamp();
+  if (!response.ok) {
+    throw new Error(payload.error || "No fue posible guardar el evento");
   }
 
-  if (eventData.rsvps) {
-    eventPayload.rsvps = eventData.rsvps;
-  } else if (!eventId) {
-    eventPayload.rsvps = {};
-  }
-
-  const docRef = doc(db, "events", finalId);
-  await import("firebase/firestore").then(({ setDoc }) => 
-    setDoc(docRef, eventPayload, { merge: true })
-  );
-  return { success: true, eventId: finalId };
+  return payload;
 }
 
 /**
@@ -236,9 +220,17 @@ export async function saveEvent(eventData, eventId = null) {
  */
 export async function deleteEvent(eventId) {
   if (!eventId) throw new Error("ID de evento requerido");
-  const docRef = doc(db, "events", eventId);
-  await import("firebase/firestore").then(({ deleteDoc }) => deleteDoc(docRef));
-  return { success: true };
+  const response = await fetch(`/api/admin/events?eventId=${encodeURIComponent(eventId)}`, {
+    method: "DELETE",
+    credentials: "same-origin"
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.error || "No fue posible eliminar el evento");
+  }
+
+  return payload;
 }
 
 /**
